@@ -9,6 +9,7 @@ US2 Repeat button.
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 
 import streamlit as st
 
@@ -139,30 +140,31 @@ def _render_list() -> None:
             cols[1].markdown(_status_badge(race.status))
             cols[2].caption(race.mode.value)
             race_id = race.id
+            svc = _get_service()
             if race.status in {RaceStatus.DRAFT, RaceStatus.READY}:
                 if cols[3].button("Start", key=f"start_{race_id}"):
-                    _safe(lambda: _get_service().start_race(race_id))
+                    _safe(partial(svc.start_race, race_id))
             elif race.status is RaceStatus.RUNNING:
                 if cols[3].button("Pause", key=f"pause_{race_id}"):
-                    _safe(lambda: _get_service().pause_race(race_id))
+                    _safe(partial(svc.pause_race, race_id))
             elif race.status is RaceStatus.PAUSED and cols[3].button(
                 "Resume", key=f"resume_{race_id}"
             ):
-                _safe(lambda: _get_service().resume_race(race_id))
+                _safe(partial(svc.resume_race, race_id))
             if race.status in {RaceStatus.RUNNING, RaceStatus.PAUSED} and cols[4].button(
                 "Finish", key=f"finish_{race_id}"
             ):
-                _safe(lambda: _get_service().finish_race(race_id))
+                _safe(partial(svc.finish_race, race_id))
             if race.status not in {RaceStatus.FINISHED, RaceStatus.CANCELLED} and cols[
                 5
             ].button("Cancel", key=f"cancel_{race_id}"):
-                _safe(lambda: _get_service().cancel_race(race_id))
+                _safe(partial(svc.cancel_race, race_id))
             if cols[6].button("Repeat", key=f"repeat_{race_id}"):
-                _safe(lambda: _get_service().repeat_race(race_id))
+                _safe(partial(svc.repeat_race, race_id))
             if race.status != RaceStatus.RUNNING and cols[7].button(
                 "Delete", key=f"delete_{race_id}"
             ):
-                _safe(lambda: _get_service().delete_race(race_id))
+                _safe(partial(svc.delete_race, race_id))
 
 
 def _safe(callable_: Callable[[], object]) -> None:
