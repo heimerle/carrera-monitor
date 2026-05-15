@@ -8,6 +8,11 @@ logs/*.jsonl
 logs/*.csv
 logs/state.json
 logs/state.json.tmp
+
+# Race-management SQLite DB (data/.gitkeep is tracked so the dir survives)
+data/*.sqlite3
+data/*.sqlite3-*
+!data/.gitkeep
 .DS_Store
 # Agent scratch dir (instructions, skills) — but track CI workflows + copilot instructions.
 .github/*

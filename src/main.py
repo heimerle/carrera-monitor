@@ -25,8 +25,11 @@ from pydantic import ValidationError
 
 from . import utils
 from .config import AppConfig, load_config
+from .database import init_db
 from .event_bus import EventBus
 from .mock_client import MockCarreraAdapter
+from .race_runner import RaceTelemetryRunner
+from .services.race_service import RaceService
 from .state_manager import StateManager
 from .storage import JsonlEventWriter
 
@@ -92,6 +95,20 @@ async def run(args: argparse.Namespace) -> int:
     log_dir = Path(cfg.logging.directory)
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    # Initialize the race-management database (creates ./data/ and schema if
+    # missing). Failure is fatal because the rest of the pipeline depends on
+    # it; but the bare existing-tests pipeline does not call run() directly.
+    try:
+        init_db(cfg.database.url, echo=cfg.database.echo)
+    except Exception:
+        logger.exception("database: init_db failed")
+        return 1
+    race_service = RaceService(config=cfg.race_management)
+    try:
+        race_service.recover_on_startup()
+    except Exception:
+        logger.exception("race_service: recover_on_startup failed")
+
     bus = EventBus()
     storage_q = bus.subscribe("storage", maxsize=8192)
     state_q = bus.subscribe("state", maxsize=1024)
@@ -129,6 +146,13 @@ async def run(args: argparse.Namespace) -> int:
 
     await writer.start()
     await state_mgr.start()
+
+    race_runner = RaceTelemetryRunner(
+        bus,
+        race_service,
+        persist_all_events=cfg.race_management.persist_all_events,
+    )
+    await race_runner.start()
 
     # Optional dashboard subprocess.
     dashboard_proc: subprocess.Popen[bytes] | None = None
@@ -172,6 +196,7 @@ async def run(args: argparse.Namespace) -> int:
             logger.exception("shutdown: adapter disconnect failed")
         await state_mgr.stop()
         await writer.stop()
+        await race_runner.stop()
         await bus.close()
         if dashboard_proc is not None:
             dashboard_proc.terminate()
@@ -191,7 +216,7 @@ def _launch_dashboard(port: int) -> subprocess.Popen[bytes] | None:
                 "-m",
                 "streamlit",
                 "run",
-                "src/dashboard.py",
+                "src/app.py",
                 "--server.port",
                 str(port),
                 "--server.headless",

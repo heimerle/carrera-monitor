@@ -30,3 +30,24 @@ cars:
   # Number of simulated cars in --mock mode (1–6). Hardware mode is driven
   # by what the adapter reports.
   count: 6
+
+database:
+  # SQLAlchemy URL for the race-management SQLite database. Created on first
+  # run; the parent directory (default ./data) is auto-created.
+  url: "sqlite:///./data/carrera_dashboard.sqlite3"
+  # Echo all SQL statements to stderr (very verbose; debug only).
+  echo: false
+
+race_management:
+  # When true, every translated TelemetryEvent during an active race is
+  # persisted into the race_events table (in addition to lap rows). When
+  # false, only lap events are persisted.
+  persist_all_events: true
+  # When false (default), races in status ∈ {running, paused, finished,
+  # cancelled} cannot be edited via the UI. Set to true to override.
+  allow_edit_running_race: false
+  # Status assigned to newly created (and repeated) races.
+  default_race_status_after_create: "draft"
+  # On startup, if a race was left in status='running' (e.g. crash),
+  # re-attach to it (true) or auto-pause it (false, default).
+  recover_running_race: false

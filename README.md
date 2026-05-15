@@ -76,6 +76,24 @@ Pass with `--config path/to/config.yaml`. CLI flags override.
 See [docs/architecture.md](docs/architecture.md) for the producer →
 bus → consumers diagram and the component contract.
 
+## Race Management
+
+The pipeline now persists configured races to a local SQLite database
+(`data/carrera_dashboard.sqlite3`) and surfaces them in three additional
+Streamlit pages: **Race Management**, **Race Reports**, and **Settings**.
+Create a race (mode `fixed_laps` or `fixed_duration`), start it, and the
+running telemetry feed automatically records laps. Finished races can be
+**Repeated** with one click (drivers + mode preserved, no historical
+data) and exported to CSV (per-driver standings + per-lap detail).
+
+- Walkthrough: [specs/001-race-management/quickstart.md](specs/001-race-management/quickstart.md)
+- Streamlit entry point: `streamlit run src/app.py -- --mock` (or simply
+  let `python -m src.main --mock` spawn it for you).
+- **Schema reset policy**: the project has no Alembic migrations yet
+  (deferred per research item R-103). When the schema changes, stop the
+  app, delete `data/carrera_dashboard.sqlite3` (plus the `-wal`/`-shm`
+  sidecars), and relaunch — `init_db()` will recreate the tables.
+
 ## Known Limitations
 
 - Single-process. The dashboard is a Streamlit subprocess of the
