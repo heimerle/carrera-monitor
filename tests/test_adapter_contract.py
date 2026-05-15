@@ -43,9 +43,7 @@ class FakeLiveAdapter:
         # Seed a deterministic event sequence.
         await self._push({"kind": "connection_state", "connection_state": "connected"})
         await self._push({"kind": "race_state", "race_state": "running"})
-        await self._push(
-            {"kind": "lap", "car_id": 1, "lap_number": 1, "lap_time_ms": 7800}
-        )
+        await self._push({"kind": "lap", "car_id": 1, "lap_number": 1, "lap_time_ms": 7800})
         await self._push({"kind": "fuel", "car_id": 1, "fuel_percent": 95.0})
         await self._push(
             {
@@ -56,12 +54,8 @@ class FakeLiveAdapter:
             }
         )
         await self._push({"kind": "speed", "car_id": 1, "speed_kmh": 24.0})
-        await self._push(
-            {"kind": "brake", "car_id": 1, "brake": 0.0}
-        )
-        await self._push(
-            {"kind": "pitlane", "car_id": 1, "in_pit": True, "pit_reason": "fuel"}
-        )
+        await self._push({"kind": "brake", "car_id": 1, "brake": 0.0})
+        await self._push({"kind": "pitlane", "car_id": 1, "in_pit": True, "pit_reason": "fuel"})
         # Signal end-of-stream so events() drains naturally.
         self._connected = False
         self._connected = False
@@ -206,9 +200,7 @@ async def test_runner_reconnect_emits_state_transitions() -> None:
     await runner.disconnect()
 
     states = [
-        ev.payload.get("state")
-        for ev in collected
-        if ev.event_type == EventType.CONNECTION_STATE
+        ev.payload.get("state") for ev in collected if ev.event_type == EventType.CONNECTION_STATE
     ]
     # Expect: connecting -> reconnecting (after fail) -> connecting -> connected
     assert ConnectionState.CONNECTING.value in states

@@ -102,9 +102,7 @@ class TelemetryEvent(BaseModel):
         keys = set(self.payload.keys())
         unknown = keys - allowed
         if unknown:
-            raise ValueError(
-                f"unknown payload keys for {self.event_type.value}: {sorted(unknown)}"
-            )
+            raise ValueError(f"unknown payload keys for {self.event_type.value}: {sorted(unknown)}")
 
         # Per-type required-field + value checks.
         p = self.payload
@@ -143,9 +141,7 @@ class TelemetryEvent(BaseModel):
             _require(p, "in_pit", bool)
             _require(p, "reason", str)
             if p["reason"] not in _PITLANE_REASONS:
-                raise ValueError(
-                    f"pitlane reason must be one of {sorted(_PITLANE_REASONS)}"
-                )
+                raise ValueError(f"pitlane reason must be one of {sorted(_PITLANE_REASONS)}")
         elif self.event_type is EventType.CONNECTION_STATE:
             _require(p, "state", str)
             ConnectionState(p["state"])

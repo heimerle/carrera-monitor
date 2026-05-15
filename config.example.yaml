@@ -24,7 +24,7 @@ dashboard:
   enabled: true
   port: 8501
   # Refresh interval in milliseconds (clamped to 500–1000).
-  refresh_interval_ms: 1000
+  refresh_interval_ms: 200
 
 cars:
   # Number of simulated cars in --mock mode (1–6). Hardware mode is driven

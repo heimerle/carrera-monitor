@@ -42,7 +42,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--config", type=Path, default=None, help="Path to YAML config file.")
     p.add_argument("--mac", type=str, default=None, help="Bypass BLE scan; connect to this MAC.")
     p.add_argument("--log-dir", type=Path, default=None, help="Override log directory.")
-    p.add_argument("--no-dashboard", action="store_true", help="Do not auto-launch Streamlit dashboard.")
+    p.add_argument(
+        "--no-dashboard", action="store_true", help="Do not auto-launch Streamlit dashboard."
+    )
     p.add_argument(
         "--log-level",
         default="INFO",

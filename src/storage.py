@@ -54,6 +54,7 @@ class JsonlEventWriter:
         self._jsonl_enabled = jsonl_enabled
         self._csv_enabled = csv_laps_enabled
         from . import utils  # local to avoid cycles
+
         t = now or utils.now_iso()
         self._jsonl_path, self._csv_path = make_log_paths(self._dir, t)
         self._jsonl_file: TextIO | None = None
@@ -84,7 +85,9 @@ class JsonlEventWriter:
                 self._csv_file = open(self._csv_path, "a", encoding="utf-8", newline="")
                 self._csv_writer = csv.writer(self._csv_file)
                 if new_file:
-                    self._csv_writer.writerow(["car_id", "lap_number", "lap_time_ms", "timestamp_iso"])
+                    self._csv_writer.writerow(
+                        ["car_id", "lap_number", "lap_time_ms", "timestamp_iso"]
+                    )
                     self._csv_file.flush()
             except OSError as exc:
                 logger.error("storage: cannot open CSV %s: %s", self._csv_path, exc)
@@ -164,12 +167,14 @@ class JsonlEventWriter:
                 wrote = False
                 for ev in batch:
                     if ev.event_type is EventType.LAP and ev.car_id is not None:
-                        self._csv_writer.writerow([
-                            ev.car_id,
-                            ev.payload["lap_number"],
-                            ev.payload["lap_time_ms"],
-                            ev.timestamp_iso.isoformat(),
-                        ])
+                        self._csv_writer.writerow(
+                            [
+                                ev.car_id,
+                                ev.payload["lap_number"],
+                                ev.payload["lap_time_ms"],
+                                ev.timestamp_iso.isoformat(),
+                            ]
+                        )
                         wrote = True
                 if wrote and self._csv_file is not None:
                     self._csv_file.flush()

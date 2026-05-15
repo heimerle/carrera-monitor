@@ -83,9 +83,15 @@ async def test_writer_swallows_oserror_on_write(tmp_path: Path, monkeypatch):
 
     # Replace the underlying file with one whose write() raises.
     class _Broken:
-        def write(self, *_a, **_kw): raise OSError("disk full")
-        def flush(self): pass
-        def close(self): pass
+        def write(self, *_a, **_kw):
+            raise OSError("disk full")
+
+        def flush(self):
+            pass
+
+        def close(self):
+            pass
+
     writer._jsonl_file = _Broken()  # type: ignore[assignment]
 
     q.put_nowait(_ev(EventType.LAP, lap_number=1, lap_time_ms=7000))

@@ -38,7 +38,7 @@ class DashboardConfig(BaseModel):
 
     enabled: bool = True
     port: int = Field(default=8501, ge=1024, le=65535)
-    refresh_interval_ms: int = Field(default=1000, ge=500, le=1000)
+    refresh_interval_ms: int = Field(default=200, ge=100, le=2000)
 
 
 class CarsConfig(BaseModel):
@@ -81,9 +81,7 @@ def _strip_unknown(raw: dict[str, Any]) -> dict[str, Any]:
             sub_clean: dict[str, Any] = {}
             for sk, sv in value.items():
                 if sk not in _KNOWN_NESTED[key]:
-                    logger.warning(
-                        "config: ignoring unknown key %r under %r", sk, key
-                    )
+                    logger.warning("config: ignoring unknown key %r under %r", sk, key)
                     continue
                 sub_clean[sk] = sv
             cleaned[key] = sub_clean

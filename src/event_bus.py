@@ -28,9 +28,7 @@ class EventBus:
         self._last_overflow_log: dict[str, float] = {}
         self._closed = False
 
-    def subscribe(
-        self, name: str, maxsize: int = 1024
-    ) -> asyncio.Queue[TelemetryEvent]:
+    def subscribe(self, name: str, maxsize: int = 1024) -> asyncio.Queue[TelemetryEvent]:
         """Register a subscriber and return its bounded queue.
 
         Names must be unique; re-subscribing under the same name raises

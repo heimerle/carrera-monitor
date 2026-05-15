@@ -59,9 +59,7 @@ class MockCarreraAdapter:
             return
         self._connected = True
         self._stop.clear()
-        self._producer_task = asyncio.create_task(
-            self._producer(), name="mock-producer"
-        )
+        self._producer_task = asyncio.create_task(self._producer(), name="mock-producer")
         # Emit a startup connection_state.
         await self._emit_raw({"kind": "connection_state", "connection_state": "connected"})
         await self._emit_raw({"kind": "race_state", "race_state": "running"})
@@ -125,7 +123,9 @@ class MockCarreraAdapter:
                     throttle_base = (
                         0.5 + 0.45 * math.sin(sim_t * 0.8 + car_id) + self._rng.uniform(-0.05, 0.05)
                     )
-                    brake_base = max(0.0, -0.4 * math.sin(sim_t * 0.8 + car_id) + self._rng.uniform(-0.02, 0.05))
+                    brake_base = max(
+                        0.0, -0.4 * math.sin(sim_t * 0.8 + car_id) + self._rng.uniform(-0.02, 0.05)
+                    )
                     if in_pit[car_id]:
                         throttle_base = max(0.0, throttle_base * 0.1)
                         brake_base = min(1.0, brake_base + 0.4)
@@ -141,12 +141,8 @@ class MockCarreraAdapter:
                             "brake": brake,
                         }
                     )
-                    await self._emit_raw(
-                        {"kind": "speed", "car_id": car_id, "speed_kmh": speed}
-                    )
-                    await self._emit_raw(
-                        {"kind": "brake", "car_id": car_id, "brake": brake}
-                    )
+                    await self._emit_raw({"kind": "speed", "car_id": car_id, "speed_kmh": speed})
+                    await self._emit_raw({"kind": "brake", "car_id": car_id, "brake": brake})
 
                     # Fuel burn
                     if not in_pit[car_id]:

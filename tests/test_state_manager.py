@@ -81,18 +81,28 @@ def test_snapshot_atomic_write_is_readable(tmp_path: Path):
 def test_connection_transitions(tmp_path: Path):
     """T026 — connected → reconnecting → connected."""
     mgr = _make_mgr(tmp_path)
-    mgr.apply(_ev(EventType.CONNECTION_STATE, payload={"state": "connected", "error": None}, ts_ms=100))
+    mgr.apply(
+        _ev(EventType.CONNECTION_STATE, payload={"state": "connected", "error": None}, ts_ms=100)
+    )
     snap = mgr.snapshot()
     assert snap["connection"]["state"] == "connected"
     assert snap["connection"]["since_ms"] == 100
 
-    mgr.apply(_ev(EventType.CONNECTION_STATE, payload={"state": "reconnecting", "error": "lost"}, ts_ms=500))
+    mgr.apply(
+        _ev(
+            EventType.CONNECTION_STATE,
+            payload={"state": "reconnecting", "error": "lost"},
+            ts_ms=500,
+        )
+    )
     snap = mgr.snapshot()
     assert snap["connection"]["state"] == "reconnecting"
     assert snap["connection"]["since_ms"] == 500
     assert snap["connection"]["last_error"] == "lost"
 
-    mgr.apply(_ev(EventType.CONNECTION_STATE, payload={"state": "connected", "error": None}, ts_ms=900))
+    mgr.apply(
+        _ev(EventType.CONNECTION_STATE, payload={"state": "connected", "error": None}, ts_ms=900)
+    )
     snap = mgr.snapshot()
     assert snap["connection"]["state"] == "connected"
     assert snap["connection"]["since_ms"] == 900

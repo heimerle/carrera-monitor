@@ -78,24 +78,30 @@ class TestPayloadShapes:
 
     def test_throttle_out_of_range_rejected(self):
         with pytest.raises(ValidationError):
-            TelemetryEvent(**_base(
-                event_type=EventType.CONTROLLER_INPUT,
-                payload={"throttle": 1.5, "brake": 0.0},
-            ))
+            TelemetryEvent(
+                **_base(
+                    event_type=EventType.CONTROLLER_INPUT,
+                    payload={"throttle": 1.5, "brake": 0.0},
+                )
+            )
 
     def test_invalid_pitlane_reason_rejected(self):
         with pytest.raises(ValidationError):
-            TelemetryEvent(**_base(
-                event_type=EventType.PITLANE,
-                payload={"in_pit": True, "reason": "bogus"},
-            ))
+            TelemetryEvent(
+                **_base(
+                    event_type=EventType.PITLANE,
+                    payload={"in_pit": True, "reason": "bogus"},
+                )
+            )
 
     def test_invalid_race_state_rejected(self):
         with pytest.raises(ValidationError):
-            TelemetryEvent(**_base(
-                event_type=EventType.RACE_STATE,
-                payload={"state": "warp_speed"},
-            ))
+            TelemetryEvent(
+                **_base(
+                    event_type=EventType.RACE_STATE,
+                    payload={"state": "warp_speed"},
+                )
+            )
 
 
 class TestCarIdRange:
@@ -106,8 +112,9 @@ class TestCarIdRange:
 
     @pytest.mark.parametrize("car_id", [1, 2, 3, 4, 5, 6, None])
     def test_valid_car_id_accepted(self, car_id):
-        e = TelemetryEvent(**_base(car_id=car_id, event_type=EventType.RACE_STATE,
-                                    payload={"state": "running"}))
+        e = TelemetryEvent(
+            **_base(car_id=car_id, event_type=EventType.RACE_STATE, payload={"state": "running"})
+        )
         assert e.car_id == car_id
 
 
@@ -119,11 +126,13 @@ class TestTopLevelExtra:
 
 class TestRawEvent:
     def test_raw_passthrough_allows_empty_payload(self):
-        e = TelemetryEvent(**_base(
-            event_type=EventType.RAW,
-            payload={},
-            raw_data={"kind": "weird", "bytes": "01020304"},
-        ))
+        e = TelemetryEvent(
+            **_base(
+                event_type=EventType.RAW,
+                payload={},
+                raw_data={"kind": "weird", "bytes": "01020304"},
+            )
+        )
         assert e.event_type is EventType.RAW
         assert e.raw_data == {"kind": "weird", "bytes": "01020304"}
 
@@ -131,5 +140,9 @@ class TestRawEvent:
 class TestEnumValues:
     def test_race_state_values(self):
         assert {s.value for s in RaceState} == {
-            "idle", "countdown", "running", "paused", "finished"
+            "idle",
+            "countdown",
+            "running",
+            "paused",
+            "finished",
         }

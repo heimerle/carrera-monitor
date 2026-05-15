@@ -290,8 +290,7 @@ class LiveCarreraAdapter:
             import carreralib  # noqa: F401  # type: ignore[import-not-found]
         except ImportError as exc:
             raise AdapterConnectionError(
-                "carreralib is not installed; install it for live mode, "
-                "or run with --mock"
+                "carreralib is not installed; install it for live mode, or run with --mock"
             ) from exc
 
         # TODO(hardware): verify carreralib field name — scan/connect API
@@ -414,9 +413,7 @@ class CarreraClientRunner:
 
     # ----- Internals ------------------------------------------------------
 
-    async def _emit_connection(
-        self, state: ConnectionState, error: str | None = None
-    ) -> None:
+    async def _emit_connection(self, state: ConnectionState, error: str | None = None) -> None:
         self._state = state
         ev = TelemetryEvent(
             timestamp_iso=utils.now_iso(),
