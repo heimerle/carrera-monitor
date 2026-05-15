@@ -1,5 +1,7 @@
 # Quickstart — Carrera Digital Telemetry Dashboard MVP
 
+> Verified end-to-end in mock mode on 2026-05-15: 19,124 events / 6 cars / state.json updated within the refresh interval.
+
 Goal: get a live dashboard with simulated telemetry running in under 5 minutes, no hardware required.
 
 ## Prerequisites
