@@ -12,6 +12,7 @@ A real `LiveCarreraAdapter` (US2) lives in this module as well so that
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -251,7 +252,248 @@ __all__ = [
     "AdapterConnectionError",
     "AdapterReadError",
     "CarreraAdapter",
+    "CarreraClientRunner",
     "DiscoveredDevice",
+    "LiveCarreraAdapter",
     "RawFrame",
     "translate_raw_frame",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Live adapter (carreralib-backed)
+# ---------------------------------------------------------------------------
+
+
+class LiveCarreraAdapter:
+    """Bluetooth-backed adapter. Lazy-imports `carreralib` so mock mode is BLE-free."""
+
+    source_name: str = "carrera_appconnect"
+
+    def __init__(
+        self,
+        *,
+        scan_timeout_seconds: int = 10,
+        debug_raw: bool = False,
+    ) -> None:
+        self._scan_timeout = scan_timeout_seconds
+        self._debug_raw = debug_raw
+        self._connected = False
+        self._client: Any = None
+        self._devices: list[DiscoveredDevice] = []
+        self._queue: asyncio.Queue[TelemetryEvent] = asyncio.Queue(maxsize=4096)
+        self._read_task: asyncio.Task[None] | None = None
+
+    async def connect(self, mac_address: str | None) -> None:
+        try:
+            import carreralib  # noqa: F401  # type: ignore[import-not-found]
+        except ImportError as exc:
+            raise AdapterConnectionError(
+                "carreralib is not installed; install it for live mode, "
+                "or run with --mock"
+            ) from exc
+
+        # TODO(hardware): verify carreralib field name — scan/connect API
+        # surface and event callback shape need confirmation against a real
+        # adapter before shipping a non-mock build.
+        try:
+            # Placeholder: carreralib exact API is not finalized here.
+            # The full live wiring is gated by R-001 (hardware-verification).
+            raise AdapterConnectionError(
+                "LiveCarreraAdapter wiring is not yet hardware-verified (R-001). "
+                "Run with --mock until US2 is closed against real hardware."
+            )
+        except AdapterConnectionError:
+            raise
+        except Exception as exc:  # pragma: no cover - hardware path
+            raise AdapterConnectionError(str(exc)) from exc
+
+    async def disconnect(self) -> None:
+        # Idempotent: safe to call when never connected.
+        if self._read_task is not None:
+            self._read_task.cancel()
+            try:
+                await self._read_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._read_task = None
+        self._connected = False
+        self._client = None
+
+    async def events(self) -> AsyncIterator[TelemetryEvent]:  # type: ignore[override]
+        while self._connected or not self._queue.empty():
+            try:
+                ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except asyncio.TimeoutError:
+                if not self._connected:
+                    break
+                continue
+            yield ev
+
+    async def discovered_devices(self) -> list[DiscoveredDevice]:
+        return list(self._devices)
+
+
+# ---------------------------------------------------------------------------
+# Reconnect-aware client runner
+# ---------------------------------------------------------------------------
+
+
+class CarreraClientRunner:
+    """Manages a `LiveCarreraAdapter` with reconnect-on-failure semantics.
+
+    Exposes the same surface as a `CarreraAdapter` so `main.py` does not
+    care whether it's talking to mock or live. Emits `connection_state`
+    events on every transition.
+    """
+
+    source_name: str = "carrera_appconnect"
+
+    def __init__(
+        self,
+        *,
+        mac_address: str | None = None,
+        scan_timeout_seconds: int = 10,
+        reconnect_interval_seconds: int = 5,
+        debug_raw: bool = False,
+        monotonic_clock: Any = None,
+        adapter_factory: Any = None,
+    ) -> None:
+        self._mac = mac_address
+        self._scan_timeout = scan_timeout_seconds
+        self._reconnect_s = reconnect_interval_seconds
+        self._debug_raw = debug_raw
+        self._mono = monotonic_clock or utils.now_monotonic_ms
+        self._adapter_factory = adapter_factory or (
+            lambda: LiveCarreraAdapter(
+                scan_timeout_seconds=scan_timeout_seconds,
+                debug_raw=debug_raw,
+            )
+        )
+        self._queue: asyncio.Queue[TelemetryEvent] = asyncio.Queue(maxsize=4096)
+        self._task: asyncio.Task[None] | None = None
+        self._stop = asyncio.Event()
+        self._current: Any = None  # current adapter instance
+        self._state: ConnectionState = ConnectionState.DISCONNECTED
+
+    async def connect(self, mac_address: str | None) -> None:
+        if mac_address is not None:
+            self._mac = mac_address
+        self._stop.clear()
+        self._task = asyncio.create_task(self._run(), name="carrera-runner")
+
+    async def disconnect(self) -> None:
+        self._stop.set()
+        if self._current is not None:
+            try:
+                await self._current.disconnect()
+            except Exception:
+                logger.exception("runner: adapter disconnect raised")
+            self._current = None
+        if self._task is not None:
+            try:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except asyncio.TimeoutError:
+                self._task.cancel()
+            except Exception:
+                logger.exception("runner: task raised on shutdown")
+            self._task = None
+
+    async def events(self) -> AsyncIterator[TelemetryEvent]:  # type: ignore[override]
+        while not self._stop.is_set() or not self._queue.empty():
+            try:
+                ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except asyncio.TimeoutError:
+                continue
+            yield ev
+
+    async def discovered_devices(self) -> list[DiscoveredDevice]:
+        if self._current is None:
+            return []
+        return await self._current.discovered_devices()
+
+    # ----- Internals ------------------------------------------------------
+
+    async def _emit_connection(
+        self, state: ConnectionState, error: str | None = None
+    ) -> None:
+        self._state = state
+        ev = TelemetryEvent(
+            timestamp_iso=utils.now_iso(),
+            timestamp_monotonic_ms=self._mono(),
+            source=self.source_name,  # type: ignore[arg-type]
+            event_type=EventType.CONNECTION_STATE,
+            payload={"state": state.value, "error": error},
+        )
+        try:
+            self._queue.put_nowait(ev)
+        except asyncio.QueueFull:
+            try:
+                _ = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._queue.put_nowait(ev)
+            except asyncio.QueueFull:
+                pass
+
+    async def _run(self) -> None:
+        try:
+            while not self._stop.is_set():
+                # Scan / connect
+                if self._mac is None:
+                    await self._emit_connection(ConnectionState.SCANNING)
+                else:
+                    await self._emit_connection(ConnectionState.CONNECTING)
+                adapter = self._adapter_factory()
+                self._current = adapter
+                try:
+                    await adapter.connect(self._mac)
+                    await self._emit_connection(ConnectionState.CONNECTED)
+                except AdapterConnectionError as exc:
+                    logger.warning("runner: connect failed: %s", exc)
+                    await self._emit_connection(ConnectionState.RECONNECTING, str(exc))
+                    self._current = None
+                    if self._stop.is_set():
+                        break
+                    await asyncio.sleep(self._reconnect_s)
+                    continue
+
+                # Pump events
+                try:
+                    async for ev in adapter.events():
+                        try:
+                            self._queue.put_nowait(ev)
+                        except asyncio.QueueFull:
+                            try:
+                                _ = self._queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                pass
+                            try:
+                                self._queue.put_nowait(ev)
+                            except asyncio.QueueFull:
+                                pass
+                        if self._stop.is_set():
+                            break
+                except AdapterReadError as exc:
+                    logger.warning("runner: read error: %s", exc)
+                    await self._emit_connection(ConnectionState.RECONNECTING, str(exc))
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.exception("runner: unexpected error during read")
+                    await self._emit_connection(ConnectionState.ERROR, str(exc))
+                finally:
+                    try:
+                        await adapter.disconnect()
+                    except Exception:
+                        pass
+                    self._current = None
+
+                if self._stop.is_set():
+                    break
+                await asyncio.sleep(self._reconnect_s)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            await self._emit_connection(ConnectionState.DISCONNECTED)

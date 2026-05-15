@@ -5,11 +5,16 @@ shell commands, and other important information, read the current plan at
 <!-- SPECKIT END -->
 
 
-# GitHub Copilot Instructions
-When fixing bugs:
-- First identify observed vs expected behavior.
-- Determine the likely root cause before changing code.
-- Prefer minimal, targeted fixes.
-- Do not introduce unrelated refactoring.
-- Add or update regression tests.
-- Explain root cause, fix, tests, and remaining risks.
+# Copilot Global Instructions
+
+Always:
+- Keep changes minimal
+- Preserve backward compatibility
+- Add tests for behavior changes
+
+Additional repository skills are located in:
+- .github/skills/bugfix-skill.md
+- .github/skills/testing-skill.md
+- .github/skills/security-review-skill.md
+
+Apply the relevant skill depending on the task.
