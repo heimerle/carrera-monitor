@@ -1,0 +1,32 @@
+# Example configuration for carrera-monitor.
+# Copy to config.yaml and edit. All sections and fields are optional;
+# missing fields fall back to the built-in defaults shown here.
+
+bluetooth:
+  # MAC address of the Carrera AppConnect adapter. If null, a BLE scan is
+  # performed at startup. Ignored in --mock mode.
+  mac_address: null
+  scan_timeout_seconds: 10
+  reconnect_interval_seconds: 5
+
+logging:
+  # Directory for JSONL event logs and the dashboard state snapshot.
+  directory: ./logs
+  jsonl_enabled: true
+  # Companion CSV with one row per lap event.
+  csv_laps_enabled: true
+  # When true, every translated frame also emits a companion `raw` event
+  # carrying the original upstream frame in `raw_data` (FR-013). Off by
+  # default to keep JSONL files lean. Can be overridden with --debug-raw.
+  debug_raw_enabled: false
+
+dashboard:
+  enabled: true
+  port: 8501
+  # Refresh interval in milliseconds (clamped to 500–1000).
+  refresh_interval_ms: 1000
+
+cars:
+  # Number of simulated cars in --mock mode (1–6). Hardware mode is driven
+  # by what the adapter reports.
+  count: 6

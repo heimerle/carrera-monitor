@@ -9,3 +9,4 @@ logs/*.csv
 logs/state.json
 logs/state.json.tmp
 .DS_Store
+.github/

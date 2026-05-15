@@ -1,0 +1,172 @@
+"""Canonical telemetry event model + enums.
+
+Single source of truth for what flows on the event bus and what gets
+serialized to JSONL. Mirrors `specs/main/data-model.md` §1–§5.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class EventType(str, Enum):
+    LAP = "lap"
+    RACE_STATE = "race_state"
+    FUEL = "fuel"
+    CONTROLLER_INPUT = "controller_input"
+    SPEED = "speed"
+    BRAKE = "brake"
+    PITLANE = "pitlane"
+    CONNECTION_STATE = "connection_state"
+    RAW = "raw"
+    NOT_SUPPORTED = "not_supported"
+
+
+class RaceState(str, Enum):
+    IDLE = "idle"
+    COUNTDOWN = "countdown"
+    RUNNING = "running"
+    PAUSED = "paused"
+    FINISHED = "finished"
+
+
+class ConnectionState(str, Enum):
+    DISCONNECTED = "disconnected"
+    SCANNING = "scanning"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    ERROR = "error"
+
+
+# Allowed payload keys per EventType. Unknown keys are rejected to catch typos
+# early (data-model §1 validation rules).
+_ALLOWED_PAYLOAD_KEYS: dict[EventType, set[str]] = {
+    EventType.LAP: {"lap_number", "lap_time_ms"},
+    EventType.RACE_STATE: {"state"},
+    EventType.FUEL: {"level_percent"},
+    EventType.CONTROLLER_INPUT: {"throttle", "brake"},
+    EventType.SPEED: {"speed_kmh"},
+    EventType.BRAKE: {"brake"},
+    EventType.PITLANE: {"in_pit", "reason"},
+    EventType.CONNECTION_STATE: {"state", "error"},
+    EventType.RAW: set(),  # passthrough, raw_data carries the frame
+    EventType.NOT_SUPPORTED: {"reason"},
+}
+
+_PITLANE_REASONS = {"manual", "fuel", "unknown"}
+
+
+class ConnectionStateRecord(BaseModel):
+    """Runtime sidecar for the current connection state."""
+
+    model_config = ConfigDict(frozen=False, extra="forbid")
+
+    state: ConnectionState = ConnectionState.DISCONNECTED
+    since_ms: int = Field(default=0, ge=0)
+    last_error: str | None = None
+
+
+class TelemetryEvent(BaseModel):
+    """Canonical immutable telemetry event."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    timestamp_iso: datetime
+    timestamp_monotonic_ms: int = Field(ge=0)
+    source: Literal["carrera_appconnect", "mock", "system"]
+    event_type: EventType
+    car_id: int | None = Field(default=None, ge=1, le=6)
+    controller_id: int | None = Field(default=None, ge=1, le=6)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    raw_data: dict[str, Any] | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("timestamp_iso")
+    @classmethod
+    def _tz_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None or v.utcoffset() is None:
+            raise ValueError("timestamp_iso must be timezone-aware")
+        return v
+
+    @model_validator(mode="after")
+    def _payload_shape(self) -> "TelemetryEvent":
+        allowed = _ALLOWED_PAYLOAD_KEYS[self.event_type]
+        if self.event_type is EventType.RAW:
+            # Passthrough: payload may be empty; raw_data carries the frame.
+            return self
+        keys = set(self.payload.keys())
+        unknown = keys - allowed
+        if unknown:
+            raise ValueError(
+                f"unknown payload keys for {self.event_type.value}: {sorted(unknown)}"
+            )
+
+        # Per-type required-field + value checks.
+        p = self.payload
+        if self.event_type is EventType.LAP:
+            _require(p, "lap_number", int)
+            _require(p, "lap_time_ms", int)
+            if p["lap_number"] < 1:
+                raise ValueError("lap_number must be ≥ 1")
+            if p["lap_time_ms"] < 0:
+                raise ValueError("lap_time_ms must be ≥ 0")
+        elif self.event_type is EventType.RACE_STATE:
+            _require(p, "state", str)
+            # Validate it's a known RaceState value (coerce via enum lookup).
+            RaceState(p["state"])
+        elif self.event_type is EventType.FUEL:
+            _require(p, "level_percent", (int, float))
+            lvl = float(p["level_percent"])
+            if not 0.0 <= lvl <= 100.0:
+                raise ValueError("fuel level_percent must be in [0, 100]")
+        elif self.event_type is EventType.CONTROLLER_INPUT:
+            _require(p, "throttle", (int, float))
+            _require(p, "brake", (int, float))
+            if not 0.0 <= float(p["throttle"]) <= 1.0:
+                raise ValueError("throttle must be in [0, 1]")
+            if not 0.0 <= float(p["brake"]) <= 1.0:
+                raise ValueError("brake must be in [0, 1]")
+        elif self.event_type is EventType.SPEED:
+            _require(p, "speed_kmh", (int, float))
+            if float(p["speed_kmh"]) < 0:
+                raise ValueError("speed_kmh must be ≥ 0")
+        elif self.event_type is EventType.BRAKE:
+            _require(p, "brake", (int, float))
+            if not 0.0 <= float(p["brake"]) <= 1.0:
+                raise ValueError("brake must be in [0, 1]")
+        elif self.event_type is EventType.PITLANE:
+            _require(p, "in_pit", bool)
+            _require(p, "reason", str)
+            if p["reason"] not in _PITLANE_REASONS:
+                raise ValueError(
+                    f"pitlane reason must be one of {sorted(_PITLANE_REASONS)}"
+                )
+        elif self.event_type is EventType.CONNECTION_STATE:
+            _require(p, "state", str)
+            ConnectionState(p["state"])
+            if "error" in p and p["error"] is not None and not isinstance(p["error"], str):
+                raise ValueError("connection_state.error must be str or null")
+        elif self.event_type is EventType.NOT_SUPPORTED:
+            _require(p, "reason", str)
+        return self
+
+
+def _require(payload: dict[str, Any], key: str, types: type | tuple[type, ...]) -> None:
+    if key not in payload:
+        raise ValueError(f"payload missing required key: {key}")
+    if not isinstance(payload[key], types):
+        raise ValueError(f"payload[{key!r}] must be of type {types}")
+
+
+__all__ = [
+    "ConnectionState",
+    "ConnectionStateRecord",
+    "EventType",
+    "RaceState",
+    "TelemetryEvent",
+]

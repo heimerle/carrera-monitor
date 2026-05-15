@@ -23,12 +23,12 @@ description: "Task list for Carrera Digital Telemetry Dashboard MVP"
 
 **Purpose**: Project scaffolding and tooling
 
-- [ ] T001 Create repository directory layout per plan: `src/`, `tests/`, `docs/`, `logs/` (with `.gitkeep`), `specs/` (already present). Create empty `src/__init__.py` and `tests/__init__.py`.
-- [ ] T002 Author `pyproject.toml` at repo root: project metadata, Python 3.11+, console script `carrera-monitor = src.main:cli_entry`, `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`, ruff + mypy config blocks.
-- [ ] T003 Author `requirements.txt` at repo root: pinned `pydantic>=2`, `pyyaml`, `streamlit`, `carreralib` (live-mode only, lazy-imported), and dev extras `pytest`, `pytest-asyncio`, `ruff`, `mypy`.
-- [ ] T004 [P] Create `.gitignore` at repo root covering `.venv/`, `__pycache__/`, `logs/*.jsonl`, `logs/*.csv`, `logs/state.json`, `.pytest_cache/`, `.mypy_cache/`, plus `.github/` per spec-kit security note.
-- [ ] T005 [P] Create `config.example.yaml` at repo root mirroring `AppConfig` defaults from [data-model.md §6](./data-model.md): `bluetooth`, `logging`, `dashboard`, `cars` sections with comments.
-- [ ] T006 [P] Create `tests/conftest.py` with shared fixtures: `frozen_clock` (monkeypatches `utils.now_monotonic_ms`/`utils.now_iso`), `tmp_log_dir` (uses pytest `tmp_path`), and `event_factory` (builds valid `TelemetryEvent` instances).
+- [X] T001 Create repository directory layout per plan: `src/`, `tests/`, `docs/`, `logs/` (with `.gitkeep`), `specs/` (already present). Create empty `src/__init__.py` and `tests/__init__.py`.
+- [X] T002 Author `pyproject.toml` at repo root: project metadata, Python 3.11+, console script `carrera-monitor = src.main:cli_entry`, `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`, ruff + mypy config blocks.
+- [X] T003 Author `requirements.txt` at repo root: pinned `pydantic>=2`, `pyyaml`, `streamlit`, `carreralib` (live-mode only, lazy-imported), and dev extras `pytest`, `pytest-asyncio`, `ruff`, `mypy`.
+- [X] T004 [P] Create `.gitignore` at repo root covering `.venv/`, `__pycache__/`, `logs/*.jsonl`, `logs/*.csv`, `logs/state.json`, `.pytest_cache/`, `.mypy_cache/`, plus `.github/` per spec-kit security note.
+- [X] T005 [P] Create `config.example.yaml` at repo root mirroring `AppConfig` defaults from [data-model.md §6](./data-model.md): `bluetooth`, `logging`, `dashboard`, `cars` sections with comments.
+- [X] T006 [P] Create `tests/conftest.py` with shared fixtures: `frozen_clock` (monkeypatches `utils.now_monotonic_ms`/`utils.now_iso`), `tmp_log_dir` (uses pytest `tmp_path`), and `event_factory` (builds valid `TelemetryEvent` instances).
 
 **Checkpoint**: Repo can be installed via `pip install -r requirements.txt`; `pytest` runs (zero tests yet, exits 0).
 
@@ -38,12 +38,12 @@ description: "Task list for Carrera Digital Telemetry Dashboard MVP"
 
 **Purpose**: Components every user story depends on. No story work begins until this phase is green.
 
-- [ ] T007 Implement time/log/atomic-write helpers in `src/utils.py`: `now_iso() -> datetime` (tz-aware UTC), `now_monotonic_ms() -> int` (rebased to process start), `atomic_write_json(path, obj)` (`tmp + os.replace`), `configure_logging(level)` (JSON formatter to stderr, one object per line per FR-032).
-- [ ] T008 Implement canonical event model in `src/event_model.py`: Pydantic `TelemetryEvent` (frozen), `EventType` / `RaceState` / `ConnectionState` string enums, `ConnectionStateRecord`, per-`event_type` payload validators (reject unknown payload keys), `forbid` extra on the top-level model. Match [data-model.md §1–§5](./data-model.md) exactly.
-- [ ] T009 [P] Implement configuration loader in `src/config.py`: Pydantic `AppConfig` with `BluetoothConfig`, `LoggingConfig`, `DashboardConfig`, `CarsConfig` submodels and defaults; `load_config(path: Path | None) -> AppConfig` that reads YAML if present, logs warnings on unknown keys, returns defaults if file absent.
-- [ ] T010 Implement async event bus in `src/event_bus.py`: `EventBus` class with `subscribe(name, maxsize) -> asyncio.Queue[TelemetryEvent]`, `publish(event)`, `close()`. Per-subscriber bounded queues; on full queue use **drop-oldest** policy and emit a single `bus_overflow` warning log per subscriber per second (R-002). No external deps.
-- [ ] T011 Implement structured logging bootstrap wired into `configure_logging` from T007: stderr-only, JSON-line format, fields `ts`, `level`, `logger`, `msg`, `**context`; honor `--log-level` from CLI contract.
-- [ ] T012 [P] Author `tests/test_event_model.py`: round-trip serialization, timezone-aware enforcement, per-`event_type` payload acceptance and rejection of unknown keys, `car_id` range validation, equality after JSON round-trip.
+- [X] T007 Implement time/log/atomic-write helpers in `src/utils.py`: `now_iso() -> datetime` (tz-aware UTC), `now_monotonic_ms() -> int` (rebased to process start), `atomic_write_json(path, obj)` (`tmp + os.replace`), `configure_logging(level)` (JSON formatter to stderr, one object per line per FR-032).
+- [X] T008 Implement canonical event model in `src/event_model.py`: Pydantic `TelemetryEvent` (frozen), `EventType` / `RaceState` / `ConnectionState` string enums, `ConnectionStateRecord`, per-`event_type` payload validators (reject unknown payload keys), `forbid` extra on the top-level model. Match [data-model.md §1–§5](./data-model.md) exactly.
+- [X] T009 [P] Implement configuration loader in `src/config.py`: Pydantic `AppConfig` with `BluetoothConfig`, `LoggingConfig`, `DashboardConfig`, `CarsConfig` submodels and defaults; `load_config(path: Path | None) -> AppConfig` that reads YAML if present, logs warnings on unknown keys, returns defaults if file absent.
+- [X] T010 Implement async event bus in `src/event_bus.py`: `EventBus` class with `subscribe(name, maxsize) -> asyncio.Queue[TelemetryEvent]`, `publish(event)`, `close()`. Per-subscriber bounded queues; on full queue use **drop-oldest** policy and emit a single `bus_overflow` warning log per subscriber per second (R-002). No external deps.
+- [X] T011 Implement structured logging bootstrap wired into `configure_logging` from T007: stderr-only, JSON-line format, fields `ts`, `level`, `logger`, `msg`, `**context`; honor `--log-level` from CLI contract.
+- [X] T012 [P] Author `tests/test_event_model.py`: round-trip serialization, timezone-aware enforcement, per-`event_type` payload acceptance and rejection of unknown keys, `car_id` range validation, equality after JSON round-trip.
 
 **Checkpoint**: `pytest tests/test_event_model.py` passes. The bus, config loader, utils, and event model are importable with no side effects.
 
