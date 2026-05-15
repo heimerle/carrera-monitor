@@ -13,14 +13,14 @@ A user opens the Streamlit app, creates a race (name, mode, lap target *or* dura
 
 **Why this priority**: Without persistence and a lifecycle, the dashboard cannot describe a "race" — only a continuous telemetry stream. This story stands up the database, the service layer, and the minimum UI to operate a race end-to-end. Reports and repeat-race are useless without it.
 
-**Independent Test**: Launch the app, create a `fixed_laps=10`, 2-driver race, start it, let the mock pipeline run, finish it. Verify a `races` row exists with `status = "finished"`, `race_drivers` has 2 rows, `race_laps` has ≥10 rows, and `started_at` / `finished_at` are populated.
+**Independent Test**: Launch the app, create a `fixed_laps=10`, 2-driver race, start it, let the mock pipeline run, finish it. Verify a `races` row exists with `status = "finished"`, `race_drivers` has 2 rows, the leader has exactly 10 `race_laps` rows (the trailing car may have ≤10), and `started_at` / `finished_at` are populated.
 
 **Acceptance Scenarios**:
 
 1. **Given** the user is on the Race Management page, **When** they submit a valid race form with mode `fixed_laps`, `lap_target = 10`, and 3 drivers, **Then** a new race is stored in SQLite with `status = "draft"` and exactly 3 `RaceDriver` rows are linked.
 2. **Given** a draft race exists, **When** the user clicks "Start", **Then** `status` becomes `running`, `started_at` is set, and the race becomes the active race context for telemetry.
 3. **Given** a running race and a `lap` telemetry event arrives for a configured `car_id`, **When** the event is dispatched on the bus, **Then** a `RaceLap` row is inserted with `race_id`, `car_id`, `driver_name`, `lap_number`, `lap_time_ms`, and ISO timestamp.
-4. **Given** a running `fixed_laps` race, **When** the slowest car has completed `lap_target` laps **OR** the user clicks "Finish", **Then** `status` becomes `finished` and `finished_at` is set.
+4. **Given** a running `fixed_laps` race, **When** the **leader** has completed `lap_target` laps **OR** the user clicks "Finish", **Then** `status` becomes `finished` and `finished_at` is set.
 5. **Given** a non-running race, **When** lap telemetry arrives, **Then** no `RaceLap` rows are written (telemetry continues to render in the live dashboard regardless).
 
 ---
@@ -51,9 +51,9 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 
 **Acceptance Scenarios**:
 
-1. **Given** a finished race with persisted laps, **When** "Generate race summary" is invoked, **Then** the rendered report shows race name, mode, start/finish/duration, driver list, and final standings sorted by lap count desc → best lap asc.
+1. **Given** a finished race with persisted laps, **When** "Generate race summary" is invoked, **Then** the rendered report shows race name, mode, start/finish/duration, driver list, and final standings sorted by `(lap_count desc, total_race_time_ms asc, best_lap_ms asc)`.
 2. **Given** a generated report, **When** the user clicks "Save report", **Then** a `RaceReport` row is created with the JSON payload and a `created_at` timestamp.
-3. **Given** a finished race, **When** the user requests "Export laps CSV", **Then** a CSV with rows `car_id, driver_name, lap_number, lap_time_ms, timestamp_iso` is downloaded.
+3. **Given** a finished race, **When** the user requests "Export laps CSV", **Then** a CSV with rows `car_id, driver_name, lap_number, lap_time_ms, timestamp_iso` is downloaded. The user MUST also be able to request "Export summary CSV" to download the per-driver final-standings CSV defined in FR-126(b).
 
 ---
 
@@ -114,9 +114,9 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 
 - **FR-122**: System MUST provide a `generate_race_summary(race_id)` that returns race metadata, start / finish / duration, drivers, and final standings.
 - **FR-123**: System MUST provide `generate_driver_stats(race_id)` that returns, per driver: total laps, best lap, average lap, last lap, total race time, optional pit count, optional fuel summary.
-- **FR-124**: System MUST provide `generate_final_standings(race_id)` that returns drivers sorted by `(lap_count desc, best_lap_ms asc, latest_lap_timestamp asc)`.
+- **FR-124**: System MUST provide `generate_final_standings(race_id)` that returns drivers sorted by `(lap_count desc, total_race_time_ms asc, best_lap_ms asc)`. Ties beyond `best_lap_ms` are broken by `car_id asc` for determinism.
 - **FR-125**: System MUST provide `save_report(race_id, report_type, payload)` that inserts a `RaceReport` row.
-- **FR-126**: System MUST offer optional CSV export of `race_laps` for a given race.
+- **FR-126**: System MUST offer two CSV exports for a finished race: (a) a **per-lap** export of `race_laps` with columns `car_id, driver_name, lap_number, lap_time_ms, timestamp_iso`, and (b) a **per-driver summary** export of final standings with columns `position, car_id, driver_name, lap_count, best_lap_ms, gap_to_leader_ms, laps_behind, total_race_time_ms, average_lap_ms, pit_count`.
 
 #### UI / Navigation
 

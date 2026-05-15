@@ -23,7 +23,8 @@ def final_standings(race_id: int) -> list[StandingsRow]
 For each driver:
 - `lap_count` = total laps recorded
 - `best_lap_ms` = `MIN(lap_time_ms)`
-- Rank by (`lap_count DESC`, `total_race_time_ms ASC`).
+- `total_race_time_ms` = `SUM(lap_time_ms)`
+- Rank by (`lap_count DESC`, `total_race_time_ms ASC`, `best_lap_ms ASC`, `car_id ASC`) per FR-124.
 - `position` = 1-based ordinal after sort.
 - `gap_to_leader_ms` = leader's `total_race_time_ms` − this driver's, when on same lap count; else `null`.
 - `laps_behind` = leader's `lap_count` − this driver's `lap_count`.
@@ -56,6 +57,14 @@ def export_summary_csv(race_id: int) -> bytes
 ```
 UTF-8 CSV bytes with header row + one row per driver in standings order. Columns:
 `position, car_id, driver_name, lap_count, best_lap_ms, gap_to_leader_ms, laps_behind, total_race_time_ms, average_lap_ms, pit_count`.
+Satisfies FR-126(b).
+
+```python
+def export_laps_csv(race_id: int) -> bytes
+```
+UTF-8 CSV bytes with header row + one row per persisted `race_laps` entry, ordered by `(car_id ASC, lap_number ASC)`. Columns:
+`car_id, driver_name, lap_number, lap_time_ms, timestamp_iso`.
+Satisfies FR-126(a) and US3 Acceptance Scenario #3.
 
 ## Auto-snapshot on finish
 

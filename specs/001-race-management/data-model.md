@@ -198,6 +198,7 @@ class StandingsRow(BaseModel):
     driver_name: str
     lap_count: int
     best_lap_ms: int | None
+    total_race_time_ms: int | None
     gap_to_leader_ms: int | None
     laps_behind: int
 
