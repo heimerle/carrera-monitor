@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import signal
 import subprocess
@@ -25,7 +26,6 @@ from pydantic import ValidationError
 from . import utils
 from .config import AppConfig, load_config
 from .event_bus import EventBus
-from .event_model import TelemetryEvent
 from .mock_client import MockCarreraAdapter
 from .state_manager import StateManager
 from .storage import JsonlEventWriter
@@ -115,7 +115,7 @@ async def run(args: argparse.Namespace) -> int:
         await adapter.connect(None)
     else:
         # Lazy import so mock mode never touches carreralib code paths.
-        from .carrera_client import CarreraClientRunner  # type: ignore[attr-defined]
+        from .carrera_client import CarreraClientRunner
 
         adapter = CarreraClientRunner(  # type: ignore[assignment]
             mac_address=cfg.bluetooth.mac_address,
@@ -143,10 +143,8 @@ async def run(args: argparse.Namespace) -> int:
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError):  # pragma: no cover - Windows
             loop.add_signal_handler(sig, _request_stop)
-        except NotImplementedError:  # pragma: no cover - Windows
-            pass
 
     # Forward events from adapter to bus.
     async def pump() -> None:
@@ -164,10 +162,8 @@ async def run(args: argparse.Namespace) -> int:
     finally:
         logger.info("shutdown: signalled, flushing within 5s")
         pump_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError, Exception):
             await asyncio.wait_for(pump_task, timeout=1.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
-            pass
         try:
             await adapter.disconnect()
         except Exception:

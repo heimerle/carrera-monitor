@@ -7,6 +7,7 @@ event_type vocabulary and ordering invariants.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from collections.abc import AsyncIterator
 from typing import Any
@@ -22,7 +23,6 @@ from src.carrera_client import (
 )
 from src.event_model import ConnectionState, EventType, TelemetryEvent
 from src.mock_client import MockCarreraAdapter
-
 
 # ---------------------------------------------------------------------------
 # A fake "live" adapter that satisfies the Protocol but uses translate_raw_frame
@@ -73,7 +73,7 @@ class FakeLiveAdapter:
         while self._connected or not self._queue.empty():
             try:
                 yield await asyncio.wait_for(self._queue.get(), timeout=0.05)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if not self._connected:
                     return
 
@@ -125,10 +125,8 @@ async def test_adapter_emits_canonical_events(adapter: Any) -> None:
             if len(collected) >= 200:
                 break
 
-    try:
+    with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(_drain(), timeout=2.0)
-    except asyncio.TimeoutError:
-        pass
     await adapter.disconnect()
 
     assert collected, "adapter produced no events"
@@ -178,7 +176,7 @@ class FlakyAdapter:
         while self._connected or not self._queue.empty():
             try:
                 yield await asyncio.wait_for(self._queue.get(), timeout=0.05)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if not self._connected:
                     return
 
@@ -203,10 +201,8 @@ async def test_runner_reconnect_emits_state_transitions() -> None:
             if any(e.event_type == EventType.RACE_STATE for e in collected):
                 return
 
-    try:
+    with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(_drain(), timeout=3.0)
-    except asyncio.TimeoutError:
-        pass
     await runner.disconnect()
 
     states = [

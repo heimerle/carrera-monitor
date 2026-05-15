@@ -9,4 +9,10 @@ logs/*.csv
 logs/state.json
 logs/state.json.tmp
 .DS_Store
-.github/
+# Agent scratch dir (instructions, skills) — but track CI workflows + copilot instructions.
+.github/*
+!.github/workflows/
+!.github/workflows/**
+!.github/copilot-instructions.md
+!.github/skills/
+!.github/skills/**

@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
-from src.event_model import ConnectionState, EventType, RaceState, TelemetryEvent
+from src.event_model import EventType, TelemetryEvent
 from src.state_manager import StateManager
 
 
 def _ev(event_type: EventType, *, car_id=None, payload=None, ts_ms=0):
     return TelemetryEvent(
-        timestamp_iso=datetime.now(tz=timezone.utc),
+        timestamp_iso=datetime.now(tz=UTC),
         timestamp_monotonic_ms=ts_ms,
         source="mock",
         event_type=event_type,

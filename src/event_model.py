@@ -1,19 +1,19 @@
 """Canonical telemetry event model + enums.
 
 Single source of truth for what flows on the event bus and what gets
-serialized to JSONL. Mirrors `specs/main/data-model.md` §1–§5.
+serialized to JSONL. Mirrors `specs/main/data-model.md` sections 1-5.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     LAP = "lap"
     RACE_STATE = "race_state"
     FUEL = "fuel"
@@ -26,7 +26,7 @@ class EventType(str, Enum):
     NOT_SUPPORTED = "not_supported"
 
 
-class RaceState(str, Enum):
+class RaceState(StrEnum):
     IDLE = "idle"
     COUNTDOWN = "countdown"
     RUNNING = "running"
@@ -34,7 +34,7 @@ class RaceState(str, Enum):
     FINISHED = "finished"
 
 
-class ConnectionState(str, Enum):
+class ConnectionState(StrEnum):
     DISCONNECTED = "disconnected"
     SCANNING = "scanning"
     CONNECTING = "connecting"
@@ -94,7 +94,7 @@ class TelemetryEvent(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _payload_shape(self) -> "TelemetryEvent":
+    def _payload_shape(self) -> TelemetryEvent:
         allowed = _ALLOWED_PAYLOAD_KEYS[self.event_type]
         if self.event_type is EventType.RAW:
             # Passthrough: payload may be empty; raw_data carries the frame.

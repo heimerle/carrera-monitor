@@ -1,4 +1,4 @@
-"""`MockCarreraAdapter` — generates a plausible telemetry stream for 1–6 cars.
+"""`MockCarreraAdapter` - generates a plausible telemetry stream for 1-6 cars.
 
 Implements the `CarreraAdapter` Protocol but yields canonical
 `TelemetryEvent`s (translation happens through `carrera_client.translate_raw_frame`).
@@ -8,6 +8,7 @@ Seedable via the `MOCK_SEED` environment variable for deterministic tests.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import math
 import os
@@ -53,7 +54,7 @@ class MockCarreraAdapter:
 
     # ----- Protocol -------------------------------------------------------
 
-    async def connect(self, mac_address: str | None) -> None:  # noqa: ARG002
+    async def connect(self, mac_address: str | None) -> None:
         if self._connected:
             return
         self._connected = True
@@ -72,17 +73,15 @@ class MockCarreraAdapter:
         self._stop.set()
         if self._producer_task is not None:
             self._producer_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._producer_task
-            except (asyncio.CancelledError, Exception):
-                pass
             self._producer_task = None
 
-    async def events(self) -> AsyncIterator[TelemetryEvent]:  # type: ignore[override]
+    async def events(self) -> AsyncIterator[TelemetryEvent]:
         while self._connected or not self._queue.empty():
             try:
                 ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if not self._connected:
                     break
                 continue
@@ -99,22 +98,18 @@ class MockCarreraAdapter:
                 self._queue.put_nowait(ev)
             except asyncio.QueueFull:
                 # Drop oldest to keep producer non-blocking.
-                try:
+                with contextlib.suppress(asyncio.QueueEmpty):
                     _ = self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-                try:
+                with contextlib.suppress(asyncio.QueueFull):
                     self._queue.put_nowait(ev)
-                except asyncio.QueueFull:
-                    pass
 
     async def _producer(self) -> None:
         """Drive per-car simulation at ~20 Hz."""
         # Per-car state
-        lap_count = {i: 0 for i in range(1, self._car_count + 1)}
-        fuel = {i: 100.0 for i in range(1, self._car_count + 1)}
-        in_pit = {i: False for i in range(1, self._car_count + 1)}
-        last_lap_t = {i: 0.0 for i in range(1, self._car_count + 1)}
+        lap_count = dict.fromkeys(range(1, self._car_count + 1), 0)
+        fuel = dict.fromkeys(range(1, self._car_count + 1), 100.0)
+        in_pit = dict.fromkeys(range(1, self._car_count + 1), False)
+        last_lap_t = dict.fromkeys(range(1, self._car_count + 1), 0.0)
         # Stagger base lap durations a bit for visual variety.
         base_lap_s = {
             i: 8.0 + 0.4 * (i - 1) + self._rng.uniform(-0.3, 0.3)

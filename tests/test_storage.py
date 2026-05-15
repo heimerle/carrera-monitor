@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ def _ev(et: EventType, **payload_overrides):
     payload = dict(payload_map[et])
     payload.update(payload_overrides)
     return TelemetryEvent(
-        timestamp_iso=datetime.now(tz=timezone.utc),
+        timestamp_iso=datetime.now(tz=UTC),
         timestamp_monotonic_ms=1,
         source="mock",
         event_type=et,

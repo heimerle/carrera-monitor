@@ -96,7 +96,7 @@ class JsonlEventWriter:
         if self._task is not None:
             try:
                 await asyncio.wait_for(self._task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._task.cancel()
             except Exception:
                 logger.exception("storage: writer task raised on shutdown")
@@ -127,7 +127,7 @@ class JsonlEventWriter:
     async def _collect_batch(self) -> list[TelemetryEvent]:
         try:
             first = await asyncio.wait_for(self._queue.get(), timeout=_FLUSH_INTERVAL_S)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return []
         batch = [first]
         # Drain anything else already queued without waiting.

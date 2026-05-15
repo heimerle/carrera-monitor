@@ -46,6 +46,17 @@ line-length = 100
 select = ["E", "F", "I", "B", "UP", "SIM", "C4", "ASYNC", "RUF"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# Blocking file I/O is intentional in storage (batched JSONL/CSV writers
+# hold long-lived handles; switching to async would add overhead without
+# benefit for the small, infrequent flushes).
+"src/storage.py" = ["ASYNC230", "SIM115"]
+# pathlib.Path is used during one-shot startup directory creation, which
+# is acceptable in an async function.
+"src/main.py" = ["ASYNC240"]
+# Tests read/write log files synchronously for assertions.
+"tests/test_storage.py" = ["ASYNC230"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
@@ -55,5 +66,5 @@ warn_unused_ignores = true
 disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
-module = ["carreralib", "carreralib.*", "streamlit", "streamlit.*"]
+module = ["carreralib", "carreralib.*", "streamlit", "streamlit.*", "streamlit_autorefresh", "streamlit_autorefresh.*"]
 ignore_missing_imports = true

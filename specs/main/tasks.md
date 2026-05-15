@@ -107,12 +107,12 @@ description: "Task list for Carrera Digital Telemetry Dashboard MVP"
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] `tests/test_storage.py` (extend): produce a session of ≥ 500 events via `MockCarreraAdapter` → `JsonlEventWriter` into a `tmp_path`; reopen the file, parse every line with `TelemetryEvent.model_validate_json`, assert (a) 100% parse rate, (b) monotonically non-decreasing `timestamp_monotonic_ms`, (c) when CSV enabled, CSV row count equals number of `lap` events in JSONL.
+- [X] T031 [P] [US3] `tests/test_storage.py` (extend): produce a session of ≥ 500 events via `MockCarreraAdapter` → `JsonlEventWriter` into a `tmp_path`; reopen the file, parse every line with `TelemetryEvent.model_validate_json`, assert (a) 100% parse rate, (b) monotonically non-decreasing `timestamp_monotonic_ms`, (c) when CSV enabled, CSV row count equals number of `lap` events in JSONL.
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Document the JSONL/CSV format guarantees and the planned (post-MVP) `tools/replay.py` extension point in `docs/architecture.md` (creating the file if absent) with a short diagram of producer → bus → consumers from [data-model.md §9](./data-model.md). Cross-link [contracts/event-log.md](./contracts/event-log.md).
-- [ ] T033 [US3] Author project `README.md` at repo root covering: overview, architecture summary + diagram link, installation, mock-mode startup, hardware setup, configuration, known limitations (no replay tool yet, single-process), roadmap (replay, websockets, REST, sniffer, analytics, OBS overlay — R-008), troubleshooting link.
+- [X] T032 [US3] Document the JSONL/CSV format guarantees and the planned (post-MVP) `tools/replay.py` extension point in `docs/architecture.md` (creating the file if absent) with a short diagram of producer → bus → consumers from [data-model.md §9](./data-model.md). Cross-link [contracts/event-log.md](./contracts/event-log.md).
+- [X] T033 [US3] Author project `README.md` at repo root covering: overview, architecture summary + diagram link, installation, mock-mode startup, hardware setup, configuration, known limitations (no replay tool yet, single-process), roadmap (replay, websockets, REST, sniffer, analytics, OBS overlay — R-008), troubleshooting link.
 
 **Checkpoint**: All three user stories independently deliverable.
 
@@ -120,12 +120,12 @@ description: "Task list for Carrera Digital Telemetry Dashboard MVP"
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] Run `ruff check src tests` and `mypy src` (configured in T002); fix any reported issues without changing public behavior.
-- [ ] T035 [P] Verify `.gitignore` excludes `.github/` agent dir, all log artifacts, and caches; confirm no credentials are tracked (security note from spec-kit init).
-- [ ] T036 Run the full quickstart end-to-end on a clean checkout (fresh venv); ensure SC-001 (under 5 min) holds. Update [quickstart.md](./quickstart.md) only if a step is wrong.
-- [ ] T037 Final review of `src/main.py` and `src/carrera_client.py` for any silent `except:` (FR-033) and any direct `carreralib` references outside `src/carrera_client.py` (FR-024); refactor on the spot.
-- [ ] T038 [P] Add CI workflow at `.github/workflows/ci.yml` (Ubuntu + macOS, Python 3.11 and 3.12 matrix): install `requirements.txt`, run `ruff check`, `mypy src`, `pytest -q`. Required by SC-005 ("tests passing locally and in CI").
-- [ ] T039 Implement raw/debug event passthrough (FR-013): add `logging.debug_raw_enabled: bool = false` to `AppConfig` (update [data-model.md §6](./data-model.md) and `config.example.yaml`) and `--debug-raw` CLI flag (update [contracts/cli.md](./contracts/cli.md) and `src/main.py` per T023). When enabled, `translate_raw_frame` (T020) additionally emits a companion `event_type = "raw"` event carrying the original frame in `raw_data`. Off by default to keep JSONL files lean.
+- [X] T034 [P] Run `ruff check src tests` and `mypy src` (configured in T002); fix any reported issues without changing public behavior.
+- [X] T035 [P] Verify `.gitignore` excludes `.github/` agent dir, all log artifacts, and caches; confirm no credentials are tracked (security note from spec-kit init).
+- [X] T036 Run the full quickstart end-to-end on a clean checkout (fresh venv); ensure SC-001 (under 5 min) holds. Update [quickstart.md](./quickstart.md) only if a step is wrong.
+- [X] T037 Final review of `src/main.py` and `src/carrera_client.py` for any silent `except:` (FR-033) and any direct `carreralib` references outside `src/carrera_client.py` (FR-024); refactor on the spot.
+- [X] T038 [P] Add CI workflow at `.github/workflows/ci.yml` (Ubuntu + macOS, Python 3.11 and 3.12 matrix): install `requirements.txt`, run `ruff check`, `mypy src`, `pytest -q`. Required by SC-005 ("tests passing locally and in CI").
+- [X] T039 Implement raw/debug event passthrough (FR-013): add `logging.debug_raw_enabled: bool = false` to `AppConfig` (update [data-model.md §6](./data-model.md) and `config.example.yaml`) and `--debug-raw` CLI flag (update [contracts/cli.md](./contracts/cli.md) and `src/main.py` per T023). When enabled, `translate_raw_frame` (T020) additionally emits a companion `event_type = "raw"` event carrying the original frame in `raw_data`. Off by default to keep JSONL files lean.
 
 ---
 

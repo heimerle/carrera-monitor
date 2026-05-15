@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +26,7 @@ def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
         return int(state["mono_ms"])
 
     def fake_iso() -> datetime:
-        return datetime.fromtimestamp(state["iso_epoch"], tz=timezone.utc)
+        return datetime.fromtimestamp(state["iso_epoch"], tz=UTC)
 
     monkeypatch.setattr(utils, "now_monotonic_ms", fake_mono)
     monkeypatch.setattr(utils, "now_iso", fake_iso)
@@ -56,7 +56,7 @@ def event_factory():
         if payload is None:
             payload = _default_payload(event_type)
         return TelemetryEvent(
-            timestamp_iso=iso or datetime.now(tz=timezone.utc),
+            timestamp_iso=iso or datetime.now(tz=UTC),
             timestamp_monotonic_ms=monotonic_ms,
             source=source,  # type: ignore[arg-type]
             event_type=event_type,

@@ -11,9 +11,9 @@ import streamlit as st
 
 # Lazy import to avoid pulling pydantic-heavy modules unnecessarily.
 try:
-    from streamlit_autorefresh import st_autorefresh  # type: ignore
+    from streamlit_autorefresh import st_autorefresh
 except Exception:  # pragma: no cover - optional dep
-    st_autorefresh = None  # type: ignore
+    st_autorefresh = None
 
 from src.config import load_config
 
@@ -21,7 +21,8 @@ from src.config import load_config
 def _load_state(path: Path) -> dict[str, Any] | None:
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            data: dict[str, Any] = json.load(f)
+            return data
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError):
@@ -55,7 +56,7 @@ def render() -> None:
         st.warning(f"Initializing… (waiting for `{state_file}`)")
         return
 
-    # Stale-data banner (mtime older than 5× refresh interval).
+    # Stale-data banner (mtime older than 5x refresh interval).
     try:
         mtime = state_file.stat().st_mtime
         age_ms = (time.time() - mtime) * 1000

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -11,14 +11,14 @@ from src.event_model import EventType, RaceState, TelemetryEvent
 
 
 def _base(**overrides):
-    base = dict(
-        timestamp_iso=datetime.now(tz=timezone.utc),
-        timestamp_monotonic_ms=10,
-        source="mock",
-        event_type=EventType.LAP,
-        car_id=1,
-        payload={"lap_number": 1, "lap_time_ms": 7500},
-    )
+    base = {
+        "timestamp_iso": datetime.now(tz=UTC),
+        "timestamp_monotonic_ms": 10,
+        "source": "mock",
+        "event_type": EventType.LAP,
+        "car_id": 1,
+        "payload": {"lap_number": 1, "lap_time_ms": 7500},
+    }
     base.update(overrides)
     return base
 

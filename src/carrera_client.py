@@ -13,6 +13,7 @@ A real `LiveCarreraAdapter` (US2) lives in this module as well so that
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -110,7 +111,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.LAP,
             car_id=car_id,
             controller_id=controller_id,
@@ -125,7 +126,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.FUEL,
             car_id=car_id,
             controller_id=controller_id,
@@ -142,7 +143,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.RACE_STATE,
             payload={"state": state_str},
             metadata=metadata,
@@ -151,7 +152,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.CONTROLLER_INPUT,
             car_id=car_id,
             controller_id=controller_id,
@@ -165,7 +166,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.SPEED,
             car_id=car_id,
             payload={"speed_kmh": max(0.0, float(frame["speed_kmh"]))},
@@ -175,7 +176,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.BRAKE,
             car_id=car_id,
             payload={"brake": _clamp(float(frame["brake"]), 0.0, 1.0)},
@@ -188,7 +189,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.PITLANE,
             car_id=car_id,
             payload={"in_pit": bool(frame["in_pit"]), "reason": reason},
@@ -205,7 +206,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.CONNECTION_STATE,
             payload={"state": state_str, "error": err if err is None else str(err)},
             metadata=metadata,
@@ -216,7 +217,7 @@ def translate_raw_frame(
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.NOT_SUPPORTED,
             payload={"reason": f"unknown frame kind: {kind!r}"},
             raw_data=raw_data_for_primary,
@@ -228,7 +229,7 @@ def translate_raw_frame(
         raw_event = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
-            source=source,  # type: ignore[arg-type]
+            source=source,
             event_type=EventType.RAW,
             car_id=car_id,
             controller_id=controller_id,
@@ -312,19 +313,17 @@ class LiveCarreraAdapter:
         # Idempotent: safe to call when never connected.
         if self._read_task is not None:
             self._read_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._read_task
-            except (asyncio.CancelledError, Exception):
-                pass
             self._read_task = None
         self._connected = False
         self._client = None
 
-    async def events(self) -> AsyncIterator[TelemetryEvent]:  # type: ignore[override]
+    async def events(self) -> AsyncIterator[TelemetryEvent]:
         while self._connected or not self._queue.empty():
             try:
                 ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if not self._connected:
                     break
                 continue
@@ -393,24 +392,25 @@ class CarreraClientRunner:
         if self._task is not None:
             try:
                 await asyncio.wait_for(self._task, timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._task.cancel()
             except Exception:
                 logger.exception("runner: task raised on shutdown")
             self._task = None
 
-    async def events(self) -> AsyncIterator[TelemetryEvent]:  # type: ignore[override]
+    async def events(self) -> AsyncIterator[TelemetryEvent]:
         while not self._stop.is_set() or not self._queue.empty():
             try:
                 ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             yield ev
 
     async def discovered_devices(self) -> list[DiscoveredDevice]:
         if self._current is None:
             return []
-        return await self._current.discovered_devices()
+        devices: list[DiscoveredDevice] = await self._current.discovered_devices()
+        return devices
 
     # ----- Internals ------------------------------------------------------
 
@@ -421,21 +421,17 @@ class CarreraClientRunner:
         ev = TelemetryEvent(
             timestamp_iso=utils.now_iso(),
             timestamp_monotonic_ms=self._mono(),
-            source=self.source_name,  # type: ignore[arg-type]
+            source=self.source_name,
             event_type=EventType.CONNECTION_STATE,
             payload={"state": state.value, "error": error},
         )
         try:
             self._queue.put_nowait(ev)
         except asyncio.QueueFull:
-            try:
+            with contextlib.suppress(asyncio.QueueEmpty):
                 _ = self._queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 self._queue.put_nowait(ev)
-            except asyncio.QueueFull:
-                pass
 
     async def _run(self) -> None:
         try:
@@ -465,14 +461,10 @@ class CarreraClientRunner:
                         try:
                             self._queue.put_nowait(ev)
                         except asyncio.QueueFull:
-                            try:
+                            with contextlib.suppress(asyncio.QueueEmpty):
                                 _ = self._queue.get_nowait()
-                            except asyncio.QueueEmpty:
-                                pass
-                            try:
+                            with contextlib.suppress(asyncio.QueueFull):
                                 self._queue.put_nowait(ev)
-                            except asyncio.QueueFull:
-                                pass
                         if self._stop.is_set():
                             break
                 except AdapterReadError as exc:
@@ -484,10 +476,8 @@ class CarreraClientRunner:
                     logger.exception("runner: unexpected error during read")
                     await self._emit_connection(ConnectionState.ERROR, str(exc))
                 finally:
-                    try:
+                    with contextlib.suppress(Exception):
                         await adapter.disconnect()
-                    except Exception:
-                        pass
                     self._current = None
 
                 if self._stop.is_set():

@@ -11,9 +11,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from . import utils
 from .event_model import (
@@ -101,18 +102,18 @@ class StateManager:
             _ = clamp_unit(float(event.payload["brake"]))
             car.last_event_at_ms = event.timestamp_monotonic_ms
         elif event.event_type is EventType.RACE_STATE:
-            new_state = RaceState(event.payload["state"])
-            if new_state is RaceState.IDLE and self._race_state is not RaceState.IDLE:
+            new_race_state = RaceState(event.payload["state"])
+            if new_race_state is RaceState.IDLE and self._race_state is not RaceState.IDLE:
                 # Reset lap counts on transition to idle (data-model §3 invariant).
                 for car in self._cars.values():
                     car.lap_count = 0
-            self._race_state = new_state
+            self._race_state = new_race_state
         elif event.event_type is EventType.CONNECTION_STATE:
-            new_state = ConnectionState(event.payload["state"])
+            new_conn_state = ConnectionState(event.payload["state"])
             err = event.payload.get("error")
-            if new_state is not self._connection.state:
+            if new_conn_state is not self._connection.state:
                 self._connection = ConnectionStateRecord(
-                    state=new_state,
+                    state=new_conn_state,
                     since_ms=event.timestamp_monotonic_ms,
                     last_error=err,
                 )
@@ -146,7 +147,7 @@ class StateManager:
         if self._task is not None:
             try:
                 await asyncio.wait_for(self._task, timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._task.cancel()
             except Exception:
                 logger.exception("state_manager: task raised on shutdown")
@@ -182,7 +183,7 @@ class StateManager:
             while not self._stop.is_set():
                 try:
                     ev = await asyncio.wait_for(self._queue.get(), timeout=0.1)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 else:
                     self.apply(ev)
