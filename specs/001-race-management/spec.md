@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-race-management`
 **Created**: 2026-05-15
-**Status**: Draft
+**Status**: Implemented (merged to `main` via PR #1, commit `fbed0ca5`)
 **Input**: User description: "Add a race management module that allows users to create, configure, store, repeat, run, and report Carrera DIGITAL races, persisted in a local database, on top of the existing telemetry dashboard."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -61,7 +61,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 
 - User selects mode `fixed_laps` and submits the form without a `lap_target` → form rejects with a validation error; nothing is written.
 - User selects 4 drivers but leaves name for car 3 empty → form rejects; the only valid empty driver slot is for car IDs beyond `driver_count`.
-- Two cars finish on the same lap with the same best lap time → standings sort uses `(lap_count desc, best_lap_ms asc, latest_lap_timestamp asc)` and is deterministic.
+- Two cars finish on the same lap with the same best lap time → standings sort follows FR-124 (`lap_count desc, total_race_time_ms asc, best_lap_ms asc, car_id asc`) and is deterministic.
 - A `lap` telemetry event arrives for a `car_id` not configured in the active race (e.g., `car_id = 5` when `driver_count = 3`) → event is logged at WARN level and **dropped**; not persisted to `race_laps`.
 - A `lap` event arrives while race is `paused` → it is **not** persisted to `race_laps`, but is still surfaced on the live dashboard.
 - User starts a new race while another race is `running` → the previous race is auto-paused with a structured warning; only one race is active at a time per process.
@@ -84,7 +84,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 
 #### Race Lifecycle
 
-- **FR-106**: System MUST support the race-status transitions `draft → ready → running → paused → running → finished` and the abort branch `* → cancelled` (where `*` is any non-terminal state).
+- **FR-106**: System MUST support the race-status transitions `draft → ready → running → paused → running → finished` and the abort branch `* → cancelled` (where `*` is any non-terminal state). The `ready` state is optional: `start_race()` MUST accept a race in either `draft` or `ready`, and an explicit `mark_ready()` transition is not required before starting.
 - **FR-107**: System MUST allow editing a race only while in `draft` (or `ready`) status, unless `race_management.allow_edit_running_race` is true.
 - **FR-108**: System MUST set `started_at` on first `start_race()` call and `finished_at` on `finish_race()` / `cancel_race()`.
 - **FR-109**: System MUST auto-finish a `running` race when (a) `fixed_laps`: the configured `lap_target` is reached by the leader, or (b) `fixed_duration`: `started_at + duration_seconds` has elapsed.
@@ -130,8 +130,9 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 - **FR-131**: System MUST place SQLAlchemy session management in `src/database.py` and ORM models in `src/models.py`.
 - **FR-132**: System MUST provide Pydantic DTOs for race configuration and report payloads in `src/schemas/race_schema.py`.
 - **FR-133**: System MUST place repository code (queries) in `src/repositories/race_repository.py` and business logic in `src/services/race_service.py` and `src/services/reporting_service.py`.
-- **FR-134**: System MUST NOT break or regress any existing test in `tests/` (52 passing as of MVP).
+- **FR-134**: System MUST NOT break or regress any existing test in `tests/` (the 52 pre-feature MVP tests MUST remain passing; the feature added 56 new tests, for a current total of 108 passing tests).
 - **FR-135**: Carrera-telemetry event mappings that depend on real hardware MUST be marked with `# TODO(hardware): …` comments where they cross the live `carreralib` boundary (consistent with the existing R-001 rule).
+- **FR-136**: On application startup, if exactly one race has status `running` or `paused` and `race_management.recover_on_startup = true`, the system MUST re-bind that race to the `ActiveRaceContext` singleton so telemetry ingest resumes against it without manual intervention.
 
 ### Key Entities *(data)*
 
@@ -149,7 +150,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 - **SC-101**: A user can create a fixed-laps race with 3 drivers, run it through 10 simulated laps with mock telemetry, and finish it — end-to-end in under 3 minutes from a fresh checkout.
 - **SC-102**: 100% of `lap` events emitted by `MockCarreraAdapter` while a race is `running` and whose `car_id` is within the active driver set produce exactly one `RaceLap` row (no duplicates, no drops).
 - **SC-103**: A repeated race contains zero rows in `race_laps`, `race_events`, and `race_reports`, and the same configuration + driver names as its source (verified by a dedicated test).
-- **SC-104**: Existing test suite (52 tests) remains green; new race-management tests (≥ the eight listed in §10 of the request) all pass on the same CI matrix.
+- **SC-104**: The 52 pre-feature MVP tests remain green; new race-management tests (≥ the eight listed in §10 of the request) all pass on the same CI matrix. (Current total: 108 passing on Python 3.11 + 3.12 × ubuntu/macos.)
 - **SC-105**: Generating a race-summary report for a finished race takes < 500 ms wall time for sessions up to 1,000 lap rows.
 - **SC-106**: Telemetry pipeline performance (FR-022 of MVP: ~60 events/s, <50 ms p95 ingest-to-disk) remains unaffected — measured by re-running the existing storage benchmark with race persistence enabled.
 - **SC-107**: A database write error during `record_lap()` does not crash the pipeline; verified by a fault-injection test.
