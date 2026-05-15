@@ -47,6 +47,27 @@ class CarsConfig(BaseModel):
     count: int = Field(default=6, ge=1, le=6)
 
 
+class DatabaseConfig(BaseModel):
+    """Race-management SQLite database connection settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "sqlite:///./data/carrera_dashboard.sqlite3"
+    echo: bool = False
+
+
+class RaceManagementConfig(BaseModel):
+    """Behaviour flags for the race-management module."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    persist_all_events: bool = True
+    allow_edit_running_race: bool = False
+    # Stored as raw string (validated against RaceStatus in src/schemas).
+    default_race_status_after_create: str = "draft"
+    recover_running_race: bool = False
+
+
 class AppConfig(BaseModel):
     # Top-level: tolerate unknown keys with a warning (see _strip_unknown).
     model_config = ConfigDict(extra="forbid")
@@ -55,14 +76,18 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     cars: CarsConfig = Field(default_factory=CarsConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    race_management: RaceManagementConfig = Field(default_factory=RaceManagementConfig)
 
 
-_KNOWN_TOP = {"bluetooth", "logging", "dashboard", "cars"}
+_KNOWN_TOP = {"bluetooth", "logging", "dashboard", "cars", "database", "race_management"}
 _KNOWN_NESTED: dict[str, set[str]] = {
     "bluetooth": set(BluetoothConfig.model_fields.keys()),
     "logging": set(LoggingConfig.model_fields.keys()),
     "dashboard": set(DashboardConfig.model_fields.keys()),
     "cars": set(CarsConfig.model_fields.keys()),
+    "database": set(DatabaseConfig.model_fields.keys()),
+    "race_management": set(RaceManagementConfig.model_fields.keys()),
 }
 
 
@@ -118,6 +143,8 @@ __all__ = [
     "BluetoothConfig",
     "CarsConfig",
     "DashboardConfig",
+    "DatabaseConfig",
     "LoggingConfig",
+    "RaceManagementConfig",
     "load_config",
 ]

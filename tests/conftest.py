@@ -91,3 +91,108 @@ def _default_payload(event_type: EventType) -> dict[str, Any]:
         case EventType.RAW:
             return {}
     return {}
+
+
+# ---------------------------------------------------------------------
+# Race-management fixtures (opt-in: only loaded by tests that request them)
+# ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def engine():
+    """In-memory SQLite engine shared across threads/connections."""
+    from sqlalchemy import create_engine, event
+    from sqlalchemy.pool import StaticPool
+
+    from src import database as db_mod
+
+    eng = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+
+    @event.listens_for(eng, "connect")
+    def _on_connect(dbapi_conn: Any, _record: Any) -> None:
+        cursor = dbapi_conn.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys = ON")
+        finally:
+            cursor.close()
+
+    # Register models on Base then create schema.
+    from sqlalchemy.orm import sessionmaker
+
+    from src import models  # noqa: F401
+
+    db_mod.Base.metadata.create_all(eng)
+    sm = sessionmaker(bind=eng, expire_on_commit=False, future=True)
+
+    # Patch module globals so SessionLocal()/get_engine() use our test engine.
+    orig_engine = db_mod._engine
+    orig_session = db_mod._SessionLocal
+    db_mod._engine = eng
+    db_mod._SessionLocal = sm
+    try:
+        yield eng
+    finally:
+        db_mod._engine = orig_engine
+        db_mod._SessionLocal = orig_session
+        eng.dispose()
+
+
+@pytest.fixture
+def session_factory(engine):
+    from src.database import get_sessionmaker
+
+    return get_sessionmaker()
+
+
+@pytest.fixture
+def db_session(session_factory):
+    sess = session_factory()
+    try:
+        yield sess
+    finally:
+        sess.close()
+
+
+@pytest.fixture
+def race_factory(engine):
+    """Build a draft race + drivers via the repository layer; return RaceRead."""
+    from src.database import SessionLocal
+    from src.repositories.race_repository import RaceRepository
+    from src.schemas.race_schema import (
+        DriverAssignment,
+        RaceCreate,
+        RaceMode,
+    )
+
+    def _make(
+        *,
+        name: str = "Test Race",
+        mode: RaceMode = RaceMode.FIXED_LAPS,
+        lap_target: int | None = 10,
+        duration_value: int | None = None,
+        duration_unit: Any = None,
+        drivers: list[tuple[int, str]] | None = None,
+    ):
+        if drivers is None:
+            drivers = [(1, "Alice"), (2, "Bob")]
+        payload = RaceCreate(
+            name=name,
+            mode=mode,
+            lap_target=lap_target,
+            duration_value=duration_value,
+            duration_unit=duration_unit,
+            driver_count=len(drivers),
+            drivers=[DriverAssignment(car_id=c, driver_name=n) for c, n in drivers],
+        )
+        repo = RaceRepository()
+        with SessionLocal() as session:
+            race = repo.create_race(session, payload)
+            session.commit()
+            return repo.to_read(session, race)
+
+    return _make
