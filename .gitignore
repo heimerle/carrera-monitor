@@ -16,3 +16,7 @@ logs/state.json.tmp
 !.github/copilot-instructions.md
 !.github/skills/
 !.github/skills/**
+
+# Build artifacts
+*.egg-info/
+.eggs/

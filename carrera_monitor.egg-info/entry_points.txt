@@ -1,2 +1,0 @@
-[console_scripts]
-carrera-monitor = src.main:cli_entry
