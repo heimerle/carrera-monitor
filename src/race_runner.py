@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from ._time import utcnow_naive
 from .event_model import EventType, TelemetryEvent
 from .race_context import ActiveRaceContext
 
@@ -40,7 +41,7 @@ class RaceTelemetryRunner:
         *,
         persist_all_events: bool = True,
         ticker_interval_s: float = 1.0,
-        clock: Callable[[], datetime] = datetime.utcnow,
+        clock: Callable[[], datetime] = utcnow_naive,
     ) -> None:
         self._bus = bus
         self._svc = race_service

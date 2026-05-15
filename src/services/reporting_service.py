@@ -10,11 +10,11 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 
+from .._time import utcnow_naive
 from ..database import SessionLocal
 from ..models import RaceLap
 from ..repositories.race_repository import RaceRepository
@@ -152,7 +152,7 @@ class ReportingService:
         race_read = self._get_race_read(race_id)
         duration_ms: int | None = None
         if race_read.started_at is not None:
-            end = race_read.finished_at or datetime.utcnow()
+            end = race_read.finished_at or utcnow_naive()
             duration_ms = int((end - race_read.started_at).total_seconds() * 1000)
         drivers = self.driver_stats(race_id)
         standings = self.final_standings(race_id)

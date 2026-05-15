@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from .._time import utcnow_naive
 from ..models import Race, RaceDriver, RaceEvent, RaceLap, RaceReport
 from ..schemas.race_schema import (
     DriverAssignment,
@@ -110,7 +111,7 @@ class RaceRepository:
         )
         race.driver_count = payload.driver_count
         race.notes = payload.notes
-        race.updated_at = datetime.utcnow()
+        race.updated_at = utcnow_naive()
 
         # Replace driver assignments wholesale (allowed only while race is editable).
         race.drivers.clear()
@@ -126,7 +127,7 @@ class RaceRepository:
 
     def set_status(self, session: Session, race: Race, status: str) -> Race:
         race.status = status
-        race.updated_at = datetime.utcnow()
+        race.updated_at = utcnow_naive()
         session.flush()
         return race
 
@@ -142,7 +143,7 @@ class RaceRepository:
             race.started_at = started_at
         if finished_at is not None:
             race.finished_at = finished_at
-        race.updated_at = datetime.utcnow()
+        race.updated_at = utcnow_naive()
         session.flush()
         return race
 

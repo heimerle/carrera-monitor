@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from .._time import utcnow_naive
 from ..config import RaceManagementConfig
 from ..database import SessionLocal
 from ..event_model import EventType, TelemetryEvent
@@ -225,7 +225,7 @@ class RaceService:
             if race is None:
                 raise RaceNotFoundError(f"race id={race_id} not found")
             _check_transition(method, race.status)
-            now = datetime.utcnow()
+            now = utcnow_naive()
             if set_started_at and race.started_at is None:
                 self._repo.set_timestamps(session, race, started_at=now)
             if set_finished_at and race.finished_at is None:

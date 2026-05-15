@@ -200,9 +200,9 @@ def _render_running_view() -> None:
         progress = min(1.0, leader_laps / race.lap_target) if race.lap_target else 0.0
         st.progress(progress, text=f"{leader_laps}/{race.lap_target} laps")
     elif race.mode is RaceMode.FIXED_DURATION and race.duration_seconds and race.started_at:
-        from datetime import datetime as _dt
+        from .._time import utcnow_naive
 
-        elapsed = (_dt.utcnow() - race.started_at).total_seconds()
+        elapsed = (utcnow_naive() - race.started_at).total_seconds()
         progress = min(1.0, elapsed / race.duration_seconds)
         st.progress(progress, text=f"{int(elapsed)}/{race.duration_seconds} s")
     rows = reporting.final_standings(race.id)

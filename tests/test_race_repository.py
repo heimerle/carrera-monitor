@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from src._time import utcnow_naive
 from src.database import SessionLocal
 from src.models import RaceDriver, RaceEvent, RaceLap, RaceReport
 from src.repositories.race_repository import RaceRepository
@@ -76,12 +75,12 @@ def test_cascade_delete_children(engine, repo):
             driver_name="A",
             lap_number=1,
             lap_time_ms=8000,
-            timestamp_iso=datetime.utcnow(),
+            timestamp_iso=utcnow_naive(),
         )
         repo.add_event(
             s,
             race_id=rid,
-            timestamp_iso=datetime.utcnow(),
+            timestamp_iso=utcnow_naive(),
             event_type="lap",
             car_id=1,
             payload={"x": 1},
@@ -104,7 +103,7 @@ def test_set_status_and_timestamps(engine, repo):
         race = repo.create_race(s, _make_payload())
         s.commit()
         rid = race.id
-    now = datetime.utcnow()
+    now = utcnow_naive()
     with SessionLocal() as s:
         race = repo.get_race(s, rid)
         repo.set_status(s, race, "running")
@@ -129,7 +128,7 @@ def test_lap_count_by_car(engine, repo):
                 driver_name="A",
                 lap_number=i + 1,
                 lap_time_ms=8000 + i,
-                timestamp_iso=datetime.utcnow(),
+                timestamp_iso=utcnow_naive(),
             )
         repo.add_lap(
             s,
@@ -138,7 +137,7 @@ def test_lap_count_by_car(engine, repo):
             driver_name="B",
             lap_number=1,
             lap_time_ms=9000,
-            timestamp_iso=datetime.utcnow(),
+            timestamp_iso=utcnow_naive(),
         )
         s.commit()
     with SessionLocal() as s:
