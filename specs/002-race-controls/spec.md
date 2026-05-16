@@ -120,7 +120,7 @@ The user opens the Settings page and flips a **Mock mode (race simulator)** togg
 - **SC-202**: 100% of user-initiated finishes persist `triggered_by='user'`; 100% of auto-finishes persist `triggered_by='auto'`. Verified by unit tests.
 - **SC-203**: Safety-car toggle round-trip (UI → DB → UI re-render) is idempotent under double-click: re-asserting the same value writes zero additional event rows. Verified by unit test.
 - **SC-204**: `data/runtime_settings.json` survives process restart and is read on the next `carrera-monitor` boot to select the adapter.
-- **SC-205**: All pre-feature tests remain green; ≥ 21 new tests cover finish-by-user, safety-car (start/end/idempotency/state-guards/clearing on finish-or-cancel), and `RuntimeSettings` (round-trip/missing/corrupt). Verified — 23 race-controls tests, full suite 150 / 150 passing as of `main` post-PR-#12.
+- **SC-205**: All pre-feature tests remain green; ≥ 21 new tests cover finish-by-user, safety-car (start/end/idempotency/state-guards/clearing on finish-or-cancel), and `RuntimeSettings` (round-trip/missing/corrupt). Verified — 23 race-controls tests pass on Python 3.11 + 3.12 × ubuntu/macos. The absolute suite size is not pinned here — see CI on `main` for the current total.
 - **SC-206**: `ruff check .` and `mypy src/` (strict) remain clean. Verified.
 
 ## Assumptions
