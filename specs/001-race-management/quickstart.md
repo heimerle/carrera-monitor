@@ -64,7 +64,7 @@ The browser opens with four tabs:
 pytest
 ```
 
-All 52 existing tests must still pass, plus the new ones for repository / service / reporting / runner / repeat.
+All 52 existing tests must still pass, plus the new ones for repository / service / reporting / runner / repeat. ("52" is the pre-001 baseline; the total drifts as later slices land — see CI on `main` for the current count.)
 
 ## 7. Live mode
 

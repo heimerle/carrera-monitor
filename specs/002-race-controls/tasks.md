@@ -115,7 +115,7 @@ description: "Task list for the Race Controls feature (Finish button, Safety Car
 - [X] T044 [US3] In [src/main.py](../../src/main.py) change adapter selection to `use_mock = args.mock or (args.mac is None and get_mock_mode())`, importing `from .services.runtime_settings import get_mock_mode`. CLI `--mock` / `--mac` still override (FR-225).
 - [X] T045 [US3] In [src/pages/settings.py](../../src/pages/settings.py) add `_render_mock_mode_toggle()`: `st.toggle("Mock mode (race simulator)")` wired to `get_mock_mode()` / `set_mock_mode(value)`; on change, immediately persist and display the new state. Add a clear "restart required" notice and a "CLI flags override" notice (FR-224).
 
-**Checkpoint**: US3 fully functional. Full suite green: 137 / 137 (was 116 pre-feature + 21 new = 137).
+**Checkpoint**: US3 fully functional. Full suite green at the time PR #5 shipped: 137 / 137 (was 116 pre-feature + 21 new = 137). The absolute total has drifted as later features landed — see CI on `main` for the current count.
 
 ---
 
@@ -123,7 +123,7 @@ description: "Task list for the Race Controls feature (Finish button, Safety Car
 
 - [X] T050 [P] Run `.venv/bin/ruff check .` — clean.
 - [X] T051 [P] Run `.venv/bin/mypy src/` (strict) — `Success: no issues found in 30 source files`.
-- [X] T052 [P] Run `.venv/bin/pytest -q` — 137 passed.
+- [X] T052 [P] Run `.venv/bin/pytest -q` — 137 passed at PR #5 ship time; current count drifts with later slices (see CI on `main`).
 - [X] T053 Commit on branch `002-race-controls`, push, open PR #6 (retroactive spec/plan/tasks), watch CI, squash-merge with `--delete-branch`.
 
 ---

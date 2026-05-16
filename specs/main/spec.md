@@ -69,10 +69,10 @@ After a race session, the user inspects the JSONL log produced during the sessio
 
 #### Connectivity & Lifecycle
 
-- **FR-001**: System MUST scan for Carrera AppConnect BLE devices on startup unless a fixed MAC address is configured.
-- **FR-002**: System MUST support a configured MAC address that bypasses scanning.
+- **FR-001**: System MUST scan for Carrera AppConnect BLE devices on startup unless a fixed MAC address is configured. (Adapter-selection precedence — mock vs. live, with vs. without a MAC — is finalized in [002/FR-225](../002-race-controls/spec.md#mock-mode-toggle-us3): `--mock` > `--mac` > `runtime_settings.mock_mode`.)
+- **FR-002**: System MUST support a configured MAC address that bypasses scanning. See FR-225 for the full precedence chain when combined with `--mock` and the persisted `runtime_settings.mock_mode`.
 - **FR-003**: System MUST maintain a connection state machine with the states `disconnected`, `scanning`, `connecting`, `connected`, `reconnecting`, `error`.
-- **FR-004**: System MUST automatically reconnect after a dropped BLE link, with a configurable retry interval.
+- **FR-004**: System MUST automatically reconnect after a dropped BLE link, with a configurable retry interval. (Post-003 the cadence is exponential backoff capped at `bluetooth.max_reconnect_interval_seconds` per [003/FR-007](../003-live-adapter-carreralib/spec.md); the single-interval wording above is the original MVP shape.)
 - **FR-005**: System MUST shut down gracefully on SIGINT/SIGTERM, flushing pending writes.
 - **FR-006**: System MUST emit a structured event for every state transition.
 
@@ -87,7 +87,7 @@ After a race session, the user inspects the JSONL log produced during the sessio
 
 - **FR-011**: System MUST emit canonical event types for at minimum: lap timing, race state, fuel values, controller input, speed, brake, pitlane events.
 - **FR-012**: System MUST emit `event_type = "not_supported"` (or equivalent) with the raw payload preserved when `carreralib` reports a value that has no canonical mapping.
-- **FR-013**: System MUST be able to emit raw/debug events behind a flag for future BLE reverse-engineering work.
+- **FR-013**: System MUST be able to emit raw/debug events behind a flag for future BLE reverse-engineering work. The flag is exposed both as the CLI option `--debug-raw` and the config key `logging.debug_raw_enabled` (off by default).
 
 #### Persistence
 
@@ -144,8 +144,8 @@ After a race session, the user inspects the JSONL log produced during the sessio
 
 ### Measurable Outcomes
 
-- **SC-001**: A developer with no Carrera hardware can clone the repo, install requirements, and have a live dashboard with simulated telemetry running in under 5 minutes following the README.
-- **SC-002**: In mock mode with 6 cars, the dashboard refreshes at the configured interval (500–1000 ms) without lag or dropped frames for at least a 10-minute continuous run.
+- **SC-001**: A developer with no Carrera hardware can clone the repo, install requirements, and have a live dashboard with simulated telemetry running in under 5 minutes following the README. (Verified manually against the quickstart; not pinned by an automated harness.)
+- **SC-002**: In mock mode with 6 cars, the dashboard refreshes at the configured interval (500–1000 ms) without lag or dropped frames for at least a 10-minute continuous run. ("Without lag or dropped frames" is a qualitative, manually-verified criterion; the only automated proxy is the 60-events/s p95 < 50 ms storage budget from SC-006-adjacent benchmarks.)
 - **SC-003**: 100% of events emitted by the system validate against the canonical TelemetryEvent schema (verified by tests and by replaying a recorded JSONL file).
 - **SC-004**: A simulated BLE disconnect causes the system to reach `connected` again within 2× `reconnect_interval_seconds` without manual intervention.
 - **SC-005**: Test suite (`pytest`) covers event model, storage, mock client, and state manager with all tests passing locally and in CI.

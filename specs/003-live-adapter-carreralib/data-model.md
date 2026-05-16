@@ -64,7 +64,7 @@ Async supervisor that drives the adapter lifecycle.
 
 ### `TelemetryEvent` (consumed, not defined here)
 
-Existing project schema produced by the adapter. The live adapter translates
+Existing project schema produced by the adapter. `TelemetryEvent.source` is set to the adapter's `source_name` — `"carrera_appconnect"` for the live adapter ([src/carrera_client.py](../../../src/carrera_client.py)) and `"mock"` for [src/mock_client.py](../../../src/mock_client.py). The live adapter translates
 two carreralib payload types into this schema:
 
 | carreralib source | Project event | Notes |

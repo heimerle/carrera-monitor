@@ -15,15 +15,19 @@ This document captures two contracts owned by this slice:
 by [tests/test_adapter_contract.py](../../../tests/test_adapter_contract.py)).
 The contract this slice owns specifically:
 
-### Method: `async def connect(self) -> None`
+### Method: `async def connect(self, mac_address: str | None = None) -> None`
 
 - **Pre-conditions**: Adapter is not currently connected.
+- **`mac_address` semantics** (mirrors [specs/main/contracts/carrera-adapter.md](../../main/contracts/carrera-adapter.md)):
+  - If `mac_address` is `None`, perform a BLE scan and connect to the first AppConnect device discovered within `bluetooth.scan_timeout_seconds`.
+  - If `mac_address` is provided, skip the scan and connect directly to that device.
 - **Post-conditions on success**: A carreralib `ControlUnit` is open; a background reader task is running and pumping events into the internal queue.
 - **`cu.reset()` gating**:
   - If `self._reset_on_connect is True` (default for a fresh adapter): MAY call `cu.reset()`. Logs `"live: initial connect — resetting CU clock"`.
   - If `self._reset_on_connect is False` (runner-set on reconnect): MUST NOT call `cu.reset()`. Logs `"live: reconnect — preserving CU clock (skipping cu.reset)"`.
 - **Errors**:
   - `carreralib.TimeoutError`: caught by the runner, not the adapter (routed through reconnect path).
+  - `AdapterConnectionError`: raised on connect failure (e.g. no devices found, MAC unreachable, `carreralib` missing).
   - Other exceptions: propagate to the runner, which records them and enters backoff.
 
 ### Method: `async def events(self) -> AsyncIterator[TelemetryEvent]`

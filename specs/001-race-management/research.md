@@ -88,4 +88,4 @@ The existing `python -m src.main` subprocess command changes to launch `streamli
 
 **Decision**: `database.py` and `models.py` import at the **top** of new modules only — never from existing modules. The existing test suite must run without `data/` or any DB file present: new tests provide their own engine via the `db_session` fixture. CI matrix is unchanged (Ubuntu + macOS × Python 3.11/3.12). `requirements.txt` adds `SQLAlchemy>=2.0,<3` only.
 
-**Rationale**: Keeps the 52 existing tests stable and avoids any conditional imports.
+**Rationale**: Keeps the 52 existing tests stable and avoids any conditional imports. ("52" is the pre-001 baseline; the total drifts as later slices land — see CI on `main` for the current count.)
