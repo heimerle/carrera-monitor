@@ -60,6 +60,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Emit a companion `raw` event for every translated frame (FR-013).",
     )
+    p.add_argument(
+        "--scan",
+        action="store_true",
+        help="Scan for Carrera Control Units via BLE/serial, print results, exit.",
+    )
     return p.parse_args(argv)
 
 
@@ -247,9 +252,34 @@ def _launch_dashboard(port: int) -> subprocess.Popen[bytes] | None:
         return None
 
 
+def _run_scan() -> int:
+    """List Carrera Control Units discoverable via BLE/serial and exit."""
+    try:
+        from carreralib import connection as cl_conn
+    except ImportError:
+        print(
+            "error: carreralib is not installed. Install it with "
+            "`pip install carreralib` (or `pip install -e .[live]`).",
+            file=sys.stderr,
+        )
+        return 2
+    print("Scanning for Carrera Control Units (this may take a few seconds)...", flush=True)
+    devices = list(cl_conn.scan())
+    if not devices:
+        print("No devices found. Make sure the AppConnect is powered on and not paired with the iOS/Android app.")
+        return 1
+    print(f"Found {len(devices)} device(s):")
+    for addr, name in devices:
+        print(f"  {addr}\t{name or '?'}")
+    print("\nTo use the first Control Unit, run: carrera-monitor --mac <address>")
+    return 0
+
+
 def cli_entry() -> int:
     args = parse_args()
     utils.configure_logging(args.log_level)
+    if args.scan:
+        return _run_scan()
     if args.mock and args.mac:
         print("error: --mock and --mac are mutually exclusive", file=sys.stderr)
         return 2

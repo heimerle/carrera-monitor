@@ -17,7 +17,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Protocol, TypedDict, runtime_checkable
+from typing import Any, ClassVar, Protocol, TypedDict, runtime_checkable
 
 from . import utils
 from .event_model import (
@@ -267,9 +267,35 @@ __all__ = [
 
 
 class LiveCarreraAdapter:
-    """Bluetooth-backed adapter. Lazy-imports `carreralib` so mock mode is BLE-free."""
+    """Bluetooth-backed adapter. Lazy-imports `carreralib` so mock mode is BLE-free.
+
+    Wraps `carreralib.ControlUnit` (which speaks the Carrera DIGITAL
+    132/124 + AppConnect protocol over BLE on macOS via bleak or over
+    serial elsewhere). The blocking `cu.poll()` call is offloaded to a
+    worker thread via `asyncio.to_thread`; translated events are pushed
+    onto an `asyncio.Queue` that `events()` drains.
+    """
 
     source_name: str = "carrera_appconnect"
+
+    # Heuristic mapping of the Status.start byte to our RaceState enum.
+    # See carreralib/__main__.py for the upstream interpretation:
+    #  - 0  → idle / no race armed
+    #  - 1..5 → start-light countdown
+    #  - 6 → running
+    #  - 7 → paused
+    # TODO(hardware): confirm against a real CU; mapping is a best-effort
+    # interpretation of the upstream demo and the protocol notes.
+    _START_TO_STATE: ClassVar[dict[int, str]] = {
+        0: "idle",
+        1: "countdown",
+        2: "countdown",
+        3: "countdown",
+        4: "countdown",
+        5: "countdown",
+        6: "running",
+        7: "paused",
+    }
 
     def __init__(
         self,
@@ -280,43 +306,219 @@ class LiveCarreraAdapter:
         self._scan_timeout = scan_timeout_seconds
         self._debug_raw = debug_raw
         self._connected = False
-        self._client: Any = None
+        self._cu: Any = None
         self._devices: list[DiscoveredDevice] = []
         self._queue: asyncio.Queue[TelemetryEvent] = asyncio.Queue(maxsize=4096)
         self._read_task: asyncio.Task[None] | None = None
+        # Per-car translation state.
+        self._prev_status: Any = None
+        self._lap_counts: dict[int, int] = {}
+        self._prev_lap_ts: dict[int, int] = {}
 
     async def connect(self, mac_address: str | None) -> None:
         try:
-            import carreralib  # noqa: F401  # type: ignore[import-not-found]
+            from carreralib import ControlUnit
+            from carreralib import connection as cl_conn
         except ImportError as exc:
             raise AdapterConnectionError(
-                "carreralib is not installed; install it for live mode, or run with --mock"
+                "carreralib is not installed; install it with "
+                "`pip install carreralib` (or `pip install -e .[live]`), "
+                "or run with --mock"
             ) from exc
 
-        # TODO(hardware): verify carreralib field name — scan/connect API
-        # surface and event callback shape need confirmation against a real
-        # adapter before shipping a non-mock build.
+        # Best-effort discovery so `discovered_devices()` is populated and
+        # we can pick a default Control Unit when no MAC was given.
         try:
-            # Placeholder: carreralib exact API is not finalized here.
-            # The full live wiring is gated by R-001 (hardware-verification).
+            scanned = await asyncio.to_thread(lambda: list(cl_conn.scan()))
+        except Exception as exc:  # pragma: no cover - hardware path
+            raise AdapterConnectionError(f"BLE/serial scan failed: {exc}") from exc
+        self._devices = [
+            DiscoveredDevice(name=str(name or "?"), address=str(addr))
+            for addr, name in scanned
+        ]
+        logger.info("live: scan found %d device(s): %s", len(self._devices), self._devices)
+
+        target = mac_address or self._pick_device()
+        if target is None:
             raise AdapterConnectionError(
-                "LiveCarreraAdapter wiring is not yet hardware-verified (R-001). "
-                "Run with --mock until US2 is closed against real hardware."
+                "no Carrera Control Unit found via BLE/serial scan; "
+                "power the AppConnect on (it must not be paired with the "
+                "iOS/Android app at the same time), or pass --mac <address> "
+                "explicitly"
             )
-        except AdapterConnectionError:
+
+        logger.info("live: opening Control Unit at %s", target)
+        try:
+            self._cu = await asyncio.to_thread(ControlUnit, target)
+        except Exception as exc:  # pragma: no cover - hardware path
+            raise AdapterConnectionError(
+                f"failed to open Control Unit at {target!r}: {exc}"
+            ) from exc
+
+        # Reset the CU timer so lap timestamps start at 0 for this session.
+        # Non-fatal on failure; we just keep the existing CU clock.
+        try:
+            await asyncio.to_thread(self._cu.reset)
+        except Exception:  # pragma: no cover - hardware path
+            logger.exception("live: cu.reset() failed; continuing without reset")
+
+        self._connected = True
+        self._read_task = asyncio.create_task(
+            self._read_loop(), name="live-cu-reader"
+        )
+
+    def _pick_device(self) -> str | None:
+        """Pick the most likely Control Unit from the scan results."""
+        for d in self._devices:
+            if d.name == "Control_Unit":
+                return d.address
+        return self._devices[0].address if self._devices else None
+
+    async def _read_loop(self) -> None:
+        # Re-import inside the loop so the isinstance discriminators are
+        # bound to the same classes carreralib actually returns.
+        from carreralib import ControlUnit
+
+        cu = self._cu
+        prev_data: Any = None
+        try:
+            while self._connected:
+                try:
+                    data = await asyncio.to_thread(cu.poll)
+                except TimeoutError:
+                    # No CU traffic within the poll timeout; keep looping.
+                    continue
+                except Exception as exc:  # pragma: no cover - hardware path
+                    raise AdapterReadError(
+                        f"Control Unit poll failed: {exc}"
+                    ) from exc
+
+                # De-dupe identical consecutive frames; matches the
+                # carreralib reference demo to avoid double-counting laps
+                # when the CU re-broadcasts the last frame.
+                if data == prev_data:
+                    continue
+                prev_data = data
+
+                if isinstance(data, ControlUnit.Status):
+                    frames = self._translate_status(data)
+                elif isinstance(data, ControlUnit.Timer):
+                    frames = self._translate_timer(data)
+                else:
+                    frames = [
+                        {"kind": "unknown", "raw": {"repr": repr(data)}}
+                    ]
+
+                for frame in frames:
+                    for ev in translate_raw_frame(
+                        frame, self.source_name, debug_raw=self._debug_raw
+                    ):
+                        self._enqueue(ev)
+        except AdapterReadError:
+            raise
+        except asyncio.CancelledError:
             raise
         except Exception as exc:  # pragma: no cover - hardware path
-            raise AdapterConnectionError(str(exc)) from exc
+            raise AdapterReadError(
+                f"live: read loop crashed: {exc}"
+            ) from exc
+
+    def _enqueue(self, ev: TelemetryEvent) -> None:
+        try:
+            self._queue.put_nowait(ev)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                _ = self._queue.get_nowait()
+            with contextlib.suppress(asyncio.QueueFull):
+                self._queue.put_nowait(ev)
+
+    def _translate_status(self, status: Any) -> list[RawFrame]:
+        """Diff the latest Status frame against the previous one and emit
+        one RawFrame per per-car change plus a race_state frame when the
+        ``start`` byte changes.
+        """
+        out: list[RawFrame] = []
+        prev = self._prev_status
+
+        # Fuel: per-car level (0..15).
+        for i, fuel in enumerate(status.fuel):
+            prev_fuel = prev.fuel[i] if prev is not None else None
+            if prev_fuel != fuel:
+                out.append(
+                    {
+                        "kind": "fuel",
+                        "car_id": i + 1,
+                        "fuel_percent": float(fuel) * 100.0 / 15.0,
+                    }
+                )
+
+        # Pit: per-car in/out flag.
+        for i, pit in enumerate(status.pit):
+            prev_pit = prev.pit[i] if prev is not None else None
+            if prev_pit != pit:
+                out.append(
+                    {
+                        "kind": "pitlane",
+                        "car_id": i + 1,
+                        "in_pit": bool(pit),
+                        "pit_reason": "unknown",
+                    }
+                )
+
+        # Race state: start-byte transitions.
+        prev_start = prev.start if prev is not None else None
+        if prev_start != status.start:
+            out.append(
+                {
+                    "kind": "race_state",
+                    "race_state": self._START_TO_STATE.get(
+                        int(status.start), "idle"
+                    ),
+                }
+            )
+
+        self._prev_status = status
+        return out
+
+    def _translate_timer(self, timer: Any) -> list[RawFrame]:
+        """Convert a CU Timer event into a `lap` RawFrame.
+
+        The CU only fires a Timer when a car crosses a sensor; we emit
+        one lap event per crossing after the first (the first crossing
+        has no lap-time reference). Lap numbering is local to this
+        session and is independent of the CU's own lap counter.
+        """
+        addr = int(timer.address)
+        ts = int(timer.timestamp)
+        car_id = addr + 1
+        prev_ts = self._prev_lap_ts.get(addr)
+        self._prev_lap_ts[addr] = ts
+        if prev_ts is None:
+            return []
+        lap_time_ms = ts - prev_ts
+        lap_n = self._lap_counts.get(addr, 0) + 1
+        self._lap_counts[addr] = lap_n
+        return [
+            {
+                "kind": "lap",
+                "car_id": car_id,
+                "lap_number": lap_n,
+                "lap_time_ms": lap_time_ms,
+            }
+        ]
 
     async def disconnect(self) -> None:
         # Idempotent: safe to call when never connected.
+        self._connected = False
         if self._read_task is not None:
             self._read_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._read_task
             self._read_task = None
-        self._connected = False
-        self._client = None
+        if self._cu is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(self._cu.close)
+            self._cu = None
 
     async def events(self) -> AsyncIterator[TelemetryEvent]:
         while self._connected or not self._queue.empty():
