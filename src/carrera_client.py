@@ -554,6 +554,13 @@ class LiveCarreraAdapter:
         out: list[RawFrame] = []
         prev = self._prev_status
 
+        speed_values = status.speed if isinstance(getattr(status, "speed", None), list | tuple) else None
+        prev_speed_values = (
+            prev.speed
+            if prev is not None and isinstance(getattr(prev, "speed", None), list | tuple)
+            else None
+        )
+
         # Fuel: per-car level (0..15).
         for i, fuel in enumerate(status.fuel):
             car_id = self._slot_mapping.normalize_slot(i)
@@ -584,6 +591,24 @@ class LiveCarreraAdapter:
                         "pit_reason": "unknown",
                     }
                 )
+
+        # Optional speed vector exposed by some carreralib builds.
+        if speed_values is not None:
+            for i, speed in enumerate(speed_values):
+                car_id = self._slot_mapping.normalize_slot(i)
+                if car_id is None:
+                    continue
+                prev_speed = None
+                if prev_speed_values is not None and i < len(prev_speed_values):
+                    prev_speed = prev_speed_values[i]
+                if prev_speed != speed and isinstance(speed, (int, float)):
+                    out.append(
+                        {
+                            "kind": "speed",
+                            "car_id": car_id,
+                            "speed_kmh": max(0.0, float(speed)),
+                        }
+                    )
 
         # Race state: start-byte transitions.
         prev_start = prev.start if prev is not None else None

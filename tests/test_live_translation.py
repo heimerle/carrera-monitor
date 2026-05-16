@@ -23,6 +23,16 @@ class _FakeStatus:
 
 
 @dataclass
+class _FakeStatusWithSpeed:
+    fuel: list[int]
+    pit: list[bool]
+    start: int
+    speed: list[float]
+    mode: int = 0
+    display: int = 0
+
+
+@dataclass
 class _FakeTimer:
     address: int
     timestamp: int
@@ -191,6 +201,28 @@ def test_status_pit_transition_emits_pitlane_frame() -> None:
     pit_frames = [f for f in frames if f["kind"] == "pitlane"]
     assert pit_frames == [
         {"kind": "pitlane", "car_id": 3, "in_pit": True, "pit_reason": "unknown"}
+    ]
+
+
+def test_status_emits_speed_frames_when_available() -> None:
+    adapter = LiveCarreraAdapter()
+    frames = adapter._translate_status(
+        _FakeStatusWithSpeed(
+            fuel=[0] * 8,
+            pit=[False] * 8,
+            start=6,
+            speed=[10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0],
+        )
+    )
+
+    speed_frames = [f for f in frames if f["kind"] == "speed"]
+    assert speed_frames == [
+        {"kind": "speed", "car_id": 1, "speed_kmh": 10.0},
+        {"kind": "speed", "car_id": 2, "speed_kmh": 20.0},
+        {"kind": "speed", "car_id": 3, "speed_kmh": 30.0},
+        {"kind": "speed", "car_id": 4, "speed_kmh": 40.0},
+        {"kind": "speed", "car_id": 5, "speed_kmh": 50.0},
+        {"kind": "speed", "car_id": 6, "speed_kmh": 60.0},
     ]
 
 

@@ -82,6 +82,7 @@ class BluetoothConnectionSupervisor:
         self._known_devices: list[BluetoothDevice] = []
         self._last_command_seq = 0
         self._manual_disconnect = False
+        self._has_connected_once = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -296,6 +297,9 @@ class BluetoothConnectionSupervisor:
             await self._emit_lifecycle_event("bluetooth_connecting", reason="desired_connected")
 
             adapter = self._adapter_factory()
+            if self._has_connected_once and hasattr(adapter, "_reset_on_connect"):
+                # Preserve the CU clock across reconnects in the same process lifecycle.
+                adapter._reset_on_connect = False
             target = (
                 target_device.mac_address
                 if target_device is not None and target_device.mac_address
@@ -311,6 +315,7 @@ class BluetoothConnectionSupervisor:
 
             self._adapter = adapter
             self._adapter_iter = adapter.events()
+            self._has_connected_once = True
             now = self._now()
             await self._set_status_locked(
                 state=BluetoothState.CONNECTED,

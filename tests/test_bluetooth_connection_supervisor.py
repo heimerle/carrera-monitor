@@ -53,6 +53,17 @@ class _ScriptedAdapter:
             await self._disconnect_event.wait()
 
 
+class _ResetAwareAdapter(_ScriptedAdapter):
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self._reset_on_connect = True
+        self.reset_flags_seen_on_connect: list[bool] = []
+
+    async def connect(self, mac: str | None) -> None:
+        self.reset_flags_seen_on_connect.append(bool(self._reset_on_connect))
+        await super().connect(mac)
+
+
 async def _wait_until(predicate, max_wait_s: float = 1.5) -> None:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + max_wait_s
@@ -146,6 +157,39 @@ async def test_unexpected_disconnect_triggers_reconnect(tmp_path: Path) -> None:
         BluetoothState.CONNECTING,
     }
     assert delays, "reconnect path should invoke wait/backoff"
+
+    await supervisor.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_skips_cu_reset_after_first_connect(tmp_path: Path) -> None:
+    first = _ResetAwareAdapter(events=[AdapterReadError("reader crashed")])
+    second = _ResetAwareAdapter()
+    adapters = [first, second]
+    idx = {"value": 0}
+
+    def _factory() -> _ResetAwareAdapter:
+        pos = idx["value"]
+        idx["value"] = min(pos + 1, len(adapters) - 1)
+        return adapters[pos]
+
+    supervisor = BluetoothConnectionSupervisor(
+        config=_make_cfg(),
+        runtime_settings=_make_runtime(tmp_path),
+        adapter_factory=_factory,
+    )
+
+    async def _fast_wait(_delay: float) -> None:
+        await asyncio.sleep(0)
+
+    supervisor._wait_or_wake = _fast_wait  # type: ignore[method-assign]
+
+    await supervisor.connect(None)
+    await _wait_until(lambda: first.connect_calls == 1)
+    await _wait_until(lambda: second.connect_calls >= 1)
+
+    assert first.reset_flags_seen_on_connect[0] is True
+    assert second.reset_flags_seen_on_connect[0] is False
 
     await supervisor.shutdown()
 
