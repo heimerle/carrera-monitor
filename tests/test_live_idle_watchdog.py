@@ -14,6 +14,7 @@ import types
 import pytest
 
 from src.carrera_client import AdapterReadError, LiveCarreraAdapter
+from src.services.live_continuity import LinkHealthTracker
 
 
 def _install_carreralib_stub() -> None:
@@ -83,3 +84,30 @@ async def test_read_loop_keeps_running_below_threshold(monkeypatch: pytest.Monke
     # Should return without raising; idle streak (2) stays below threshold.
     await asyncio.wait_for(adapter._read_loop(), timeout=2.0)
     assert polls >= 3
+
+
+def test_link_health_transitions_healthy_to_degraded_to_stalled_to_reconnecting_to_healthy() -> None:
+    tracker = LinkHealthTracker(warning_threshold=2, hard_threshold=4)
+
+    assert tracker.state.state == "healthy"
+
+    tracker.on_timeout()  # 1
+    assert tracker.state.state == "healthy"
+
+    tracker.on_timeout()  # 2
+    assert tracker.state.state == "degraded"
+    assert tracker.state.reason == "timeout_streak_warning"
+
+    tracker.on_timeout()  # 3
+    tracker.on_timeout()  # 4
+    assert tracker.state.state == "stalled"
+    assert tracker.state.reason == "timeout_streak_hard"
+
+    tracker.mark_reconnecting("watchdog_reconnect")
+    assert tracker.state.state == "reconnecting"
+    assert tracker.state.reason == "watchdog_reconnect"
+
+    tracker.on_frame(now_monotonic_ms=1234)
+    assert tracker.state.state == "healthy"
+    assert tracker.state.timeout_streak == 0
+    assert tracker.state.last_frame_at_ms == 1234

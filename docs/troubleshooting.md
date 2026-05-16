@@ -64,6 +64,61 @@ The `CarreraClientRunner` will keep retrying every
 - No other app is currently connected to the unit
 - The MAC address (if passed via `--mac`) is correct
 
+Also verify hardening thresholds in `config.yaml`:
+
+```yaml
+bluetooth:
+  reconnect_interval_seconds: 2
+  max_reconnect_interval_seconds: 20
+  idle_warning_seconds: 5
+  idle_timeout_seconds: 15
+```
+
+If `idle_warning_seconds >= idle_timeout_seconds` or
+`max_reconnect_interval_seconds < reconnect_interval_seconds`, startup
+fails with a config validation error.
+
+## Active car count is wrong (phantom cars / never converges)
+
+The live adapter canonicalizes raw slots to race IDs `1..6`. Slots outside
+that range are ignored for race ingest and active-car detection.
+
+Checks:
+
+1. Inspect `logs/state.json` and verify `active_car_ids` / `active_car_count`.
+2. Confirm the race has recent telemetry for the active cars (speed/fuel/lap,
+  not lap-only).
+3. Increase activity briefly (throttle/lap) and re-check within the detection
+  window.
+
+## Laps appear to duplicate or disappear after reconnect
+
+Reconnect hardening uses a per-lap identity `(race_id, car_id, cu_timestamp_ms)`.
+Replayed crossings are suppressed as no-op and logged as diagnostics.
+
+Checks:
+
+1. Confirm lap events include `cu_timestamp_ms` in payload (JSONL log).
+2. Verify continuity tables exist:
+  - `race_lap_checkpoints`
+  - `race_lap_ingest_identities`
+3. Ensure `race_management.recover_running_race: true` in config when restart
+  continuity is desired.
+
+## Periodic reconnect unexpectedly triggers mid-race
+
+Default policy is disabled periodic reconnect (`0`) plus running-race guard:
+
+```yaml
+bluetooth:
+  periodic_forced_reconnect_seconds: 0
+  periodic_reconnect_only_when_not_running: true
+```
+
+If you explicitly set a periodic interval, keep
+`periodic_reconnect_only_when_not_running: true` to avoid maintenance
+reconnects during active race state `running`.
+
 ## Dashboard shows "stale data"
 
 The Streamlit dashboard reads `logs/state.json`. If the producer process

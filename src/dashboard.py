@@ -70,6 +70,9 @@ def _car_color(car_id: int) -> str:
 def _connection_color(state: str) -> str:
     return {
         "connected": "#22C55E",
+        "healthy": "#22C55E",
+        "degraded": "#F59E0B",
+        "stalled": "#EF4444",
         "connecting": "#F59E0B",
         "scanning": "#F59E0B",
         "reconnecting": "#EF4444",
@@ -211,7 +214,9 @@ h1, h2, h3, h4 { letter-spacing: 0.02em; }
 def _render_header(state: dict[str, Any]) -> None:
     conn = state.get("connection") or {}
     conn_state = str(conn.get("state", "?"))
+    conn_reason = conn.get("reason")
     race_state = str(state.get("race", "idle"))
+    active_car_count = int(state.get("active_car_count") or 0)
     last_err = conn.get("last_error")
 
     err_html = ""
@@ -219,6 +224,12 @@ def _render_header(state: dict[str, Any]) -> None:
         err_html = (
             f'<span class="cm-badge" style="color:#fecaca;border-color:#7f1d1d;">'
             f"⚠ {last_err}</span>"
+        )
+    reason_html = ""
+    if isinstance(conn_reason, str) and conn_reason:
+        reason_html = (
+            '<span class="cm-badge" style="color:#cbd5e1;border-color:#334155;">'
+            f"REASON · {conn_reason}</span>"
         )
 
     st.html(
@@ -228,6 +239,8 @@ def _render_header(state: dict[str, Any]) -> None:
                 <div class="cm-title"><span class="flag">🏁</span>CARRERA · LIVE TIMING</div>
                 <div class="cm-badges">
                     {err_html}
+                    {reason_html}
+                    <span class="cm-badge">CARS · {active_car_count}</span>
                     <span class="cm-badge">
                         <span class="dot" style="background:{_race_color(race_state)}"></span>
                         RACE · {race_state.upper()}

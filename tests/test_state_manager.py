@@ -22,9 +22,20 @@ def _ev(event_type: EventType, *, car_id=None, payload=None, ts_ms=0):
     )
 
 
-def _make_mgr(tmp_path: Path) -> StateManager:
+def _make_mgr(
+    tmp_path: Path,
+    *,
+    active_car_window_ms: int = 3000,
+    monotonic_clock=None,
+) -> StateManager:
     q: asyncio.Queue[TelemetryEvent] = asyncio.Queue()
-    return StateManager(q, state_file=tmp_path / "state.json", refresh_interval_ms=1000)
+    return StateManager(
+        q,
+        state_file=tmp_path / "state.json",
+        refresh_interval_ms=1000,
+        active_car_window_ms=active_car_window_ms,
+        monotonic_clock=monotonic_clock,
+    )
 
 
 def test_lap_updates_best_and_latest(tmp_path: Path):
@@ -57,13 +68,33 @@ def test_pit_state_transitions(tmp_path: Path):
     assert mgr.snapshot()["cars"][0]["in_pit"] is False
 
 
-def test_race_state_idle_resets_lap_counts(tmp_path: Path):
+def test_race_state_idle_does_not_reset_lap_counts_on_transient_idle(tmp_path: Path):
     mgr = _make_mgr(tmp_path)
     mgr.apply(_ev(EventType.RACE_STATE, payload={"state": "running"}))
     mgr.apply(_ev(EventType.LAP, car_id=1, payload={"lap_number": 5, "lap_time_ms": 8000}))
     assert mgr.snapshot()["cars"][0]["lap_count"] == 5
     mgr.apply(_ev(EventType.RACE_STATE, payload={"state": "idle"}))
-    assert mgr.snapshot()["cars"][0]["lap_count"] == 0
+    assert mgr.snapshot()["cars"][0]["lap_count"] == 5
+
+
+def test_active_car_detection_window(tmp_path: Path):
+    clock = {"ms": 0}
+    mgr = _make_mgr(
+        tmp_path,
+        active_car_window_ms=1000,
+        monotonic_clock=lambda: int(clock["ms"]),
+    )
+
+    mgr.apply(_ev(EventType.SPEED, car_id=1, payload={"speed_kmh": 10.0}, ts_ms=100))
+    clock["ms"] = 500
+    snap = mgr.snapshot()
+    assert snap["active_car_ids"] == [1]
+    assert snap["active_car_count"] == 1
+
+    clock["ms"] = 1_800
+    snap = mgr.snapshot()
+    assert snap["active_car_ids"] == []
+    assert snap["active_car_count"] == 0
 
 
 def test_snapshot_atomic_write_is_readable(tmp_path: Path):
@@ -91,7 +122,7 @@ def test_connection_transitions(tmp_path: Path):
     mgr.apply(
         _ev(
             EventType.CONNECTION_STATE,
-            payload={"state": "reconnecting", "error": "lost"},
+            payload={"state": "reconnecting", "error": "lost", "reason": "adapter_read_error"},
             ts_ms=500,
         )
     )
@@ -99,6 +130,7 @@ def test_connection_transitions(tmp_path: Path):
     assert snap["connection"]["state"] == "reconnecting"
     assert snap["connection"]["since_ms"] == 500
     assert snap["connection"]["last_error"] == "lost"
+    assert snap["connection"]["reason"] == "adapter_read_error"
 
     mgr.apply(
         _ev(EventType.CONNECTION_STATE, payload={"state": "connected", "error": None}, ts_ms=900)

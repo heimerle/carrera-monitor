@@ -38,6 +38,7 @@ from . import (
     RaceNotFoundError,
     RaceValidationError,
 )
+from .live_continuity import LiveContinuityService
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -91,9 +92,11 @@ class RaceService:
         *,
         config: RaceManagementConfig | None = None,
         repository: RaceRepository | None = None,
+        continuity_service: LiveContinuityService | None = None,
     ) -> None:
         self._cfg = config or RaceManagementConfig()
         self._repo = repository or RaceRepository()
+        self._continuity = continuity_service or LiveContinuityService(self._repo)
         # In-memory safety-car flag per race id. Authoritative state is the
         # `safety_car_started` / `safety_car_ended` rows in `race_events`; the
         # dict is a fast cache populated lazily on first read.
@@ -397,15 +400,61 @@ class RaceService:
                         extra={"race_id": race_id, "car_id": event.car_id},
                     )
                     return
+                cu_timestamp_ms = self._extract_cu_timestamp(event)
+                is_new_identity = self._continuity.register_lap_identity(
+                    session,
+                    race_id=race.id,
+                    car_id=event.car_id,
+                    cu_timestamp_ms=cu_timestamp_ms,
+                )
+                if not is_new_identity:
+                    logger.info(
+                        "race_service: duplicate lap crossing suppressed",
+                        extra={
+                            "race_id": race.id,
+                            "car_id": event.car_id,
+                            "cu_timestamp_ms": cu_timestamp_ms,
+                            "reason": "duplicate_crossing",
+                        },
+                    )
+                    session.commit()
+                    return
+
+                checkpoint = self._continuity.load_checkpoint(
+                    session,
+                    race_id=race.id,
+                    car_id=event.car_id,
+                )
+                if checkpoint is None:
+                    self._continuity.seed_from_existing_laps(
+                        session,
+                        race_id=race.id,
+                        car_id=event.car_id,
+                    )
+                    checkpoint = self._continuity.load_checkpoint(
+                        session,
+                        race_id=race.id,
+                        car_id=event.car_id,
+                    )
+
+                previous_lap_count = checkpoint.lap_count if checkpoint is not None else 0
+                next_lap_number = int(previous_lap_count) + 1
                 try:
                     self._repo.add_lap(
                         session,
                         race_id=race.id,
                         car_id=event.car_id,
                         driver_name=driver.driver_name,
-                        lap_number=int(event.payload["lap_number"]),
+                        lap_number=next_lap_number,
                         lap_time_ms=int(event.payload["lap_time_ms"]),
                         timestamp_iso=event.timestamp_iso,
+                    )
+                    self._continuity.save_checkpoint(
+                        session,
+                        race_id=race.id,
+                        car_id=event.car_id,
+                        last_cu_timestamp_ms=cu_timestamp_ms,
+                        lap_count=next_lap_number,
                     )
                     session.commit()
                 except SQLAlchemyError:
@@ -416,10 +465,27 @@ class RaceService:
                     )
                     session.rollback()
                     return
+                logger.debug(
+                    "race_service: lap checkpoint updated",
+                    extra={
+                        "race_id": race.id,
+                        "car_id": event.car_id,
+                        "lap_count": next_lap_number,
+                        "last_cu_timestamp_ms": cu_timestamp_ms,
+                        "restored_from_checkpoint": previous_lap_count > 0,
+                    },
+                )
                 if race.mode == "fixed_laps" and race.lap_target is not None:
                     self._maybe_auto_finish(session, race)
         except SQLAlchemyError:
             logger.exception("race_service: lap-ingest session failure")
+
+    @staticmethod
+    def _extract_cu_timestamp(event: TelemetryEvent) -> int:
+        raw = event.payload.get("cu_timestamp_ms")
+        if isinstance(raw, int) and raw >= 0:
+            return raw
+        return max(0, int(event.timestamp_monotonic_ms))
 
     def record_event(self, event: TelemetryEvent) -> None:
         """Persist a non-lap event into ``race_events`` when an active race exists."""
@@ -484,6 +550,16 @@ class RaceService:
         with SessionLocal() as session:
             races = self._repo.list_races(session, status=RaceStatus.RUNNING)
         for race in races:
+            with SessionLocal() as session:
+                full = self._repo.get_race(session, race.id)
+                if full is not None:
+                    for driver in full.drivers:
+                        self._continuity.seed_from_existing_laps(
+                            session,
+                            race_id=full.id,
+                            car_id=driver.car_id,
+                        )
+                    session.commit()
             if self._cfg.recover_running_race:
                 ActiveRaceContext.set(race.id)
                 logger.warning(

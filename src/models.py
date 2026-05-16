@@ -140,6 +140,67 @@ class RaceLap(Base):
     race: Mapped[Race] = relationship(back_populates="laps")
 
 
+class RaceLapCheckpoint(Base):
+    __tablename__ = "race_lap_checkpoints"
+    __table_args__ = (
+        CheckConstraint("car_id BETWEEN 1 AND 6", name="ck_race_lap_checkpoints_car_id"),
+        CheckConstraint(
+            "last_cu_timestamp_ms >= 0",
+            name="ck_race_lap_checkpoints_last_cu_timestamp_ms",
+        ),
+        CheckConstraint("lap_count >= 0", name="ck_race_lap_checkpoints_lap_count"),
+        UniqueConstraint(
+            "race_id",
+            "car_id",
+            name="uq_race_lap_checkpoints_race_car",
+        ),
+        Index("ix_race_lap_checkpoints_race", "race_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    race_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False
+    )
+    car_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_cu_timestamp_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lap_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+class RaceLapIngestIdentity(Base):
+    __tablename__ = "race_lap_ingest_identities"
+    __table_args__ = (
+        CheckConstraint("car_id BETWEEN 1 AND 6", name="ck_race_lap_ingest_identities_car_id"),
+        CheckConstraint(
+            "cu_timestamp_ms >= 0",
+            name="ck_race_lap_ingest_identities_cu_timestamp_ms",
+        ),
+        UniqueConstraint(
+            "race_id",
+            "car_id",
+            "cu_timestamp_ms",
+            name="uq_race_lap_ingest_identities_race_car_cu_ts",
+        ),
+        Index("ix_race_lap_ingest_identities_race", "race_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    race_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False
+    )
+    car_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    cu_timestamp_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
 class RaceEvent(Base):
     __tablename__ = "race_events"
     __table_args__ = (
@@ -182,4 +243,12 @@ class RaceReport(Base):
     race: Mapped[Race] = relationship(back_populates="reports")
 
 
-__all__ = ["Race", "RaceDriver", "RaceEvent", "RaceLap", "RaceReport"]
+__all__ = [
+    "Race",
+    "RaceDriver",
+    "RaceEvent",
+    "RaceLap",
+    "RaceLapCheckpoint",
+    "RaceLapIngestIdentity",
+    "RaceReport",
+]

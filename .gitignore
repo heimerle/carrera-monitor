@@ -1,9 +1,12 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+dist/
+build/
 logs/*.jsonl
 logs/*.csv
 logs/state.json
@@ -14,6 +17,11 @@ data/*.sqlite3
 data/*.sqlite3-*
 !data/.gitkeep
 .DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
 # Agent scratch dir (instructions, skills) — but track CI workflows + copilot instructions.
 .github/*
 !.github/workflows/

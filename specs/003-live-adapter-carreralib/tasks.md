@@ -15,9 +15,9 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 **Purpose**: Prepare configuration and scaffolding shared by all stories.
 
-- [ ] T001 Add new bluetooth hardening defaults and validation fields in `src/config.py` and `config.example.yaml`
-- [ ] T002 Create continuity service scaffold in `src/services/live_continuity.py`
-- [ ] T003 Export continuity service symbols in `src/services/__init__.py`
+- [X] T001 Add new bluetooth hardening defaults and validation fields in `src/config.py` and `config.example.yaml`
+- [X] T002 Create continuity service scaffold in `src/services/live_continuity.py`
+- [X] T003 Export continuity service symbols in `src/services/__init__.py`
 
 ---
 
@@ -27,12 +27,12 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 **⚠️ CRITICAL**: No user story work starts before this phase is complete.
 
-- [ ] T004 Add `RaceLapCheckpoint` and `RaceLapIngestIdentity` ORM models in `src/models.py`
-- [ ] T005 Add schema smoke coverage for new tables and constraints in `tests/test_database_init.py`
-- [ ] T006 Implement checkpoint and lap-identity repository operations in `src/repositories/race_repository.py`
-- [ ] T007 Add repository tests for checkpoint/idempotency behavior in `tests/test_race_repository.py`
-- [ ] T008 Wire continuity dependencies into race ingest path in `src/services/race_service.py` and `src/race_runner.py`
-- [ ] T009 Create reconnect continuity test harness and fixtures in `tests/test_live_continuity.py`
+- [X] T004 Add `RaceLapCheckpoint` and `RaceLapIngestIdentity` ORM models in `src/models.py`
+- [X] T005 Add schema smoke coverage for new tables and constraints in `tests/test_database_init.py`
+- [X] T006 Implement checkpoint and lap-identity repository operations in `src/repositories/race_repository.py`
+- [X] T007 Add repository tests for checkpoint/idempotency behavior in `tests/test_race_repository.py`
+- [X] T008 Wire continuity dependencies into race ingest path in `src/services/race_service.py` and `src/race_runner.py`
+- [X] T009 Create reconnect continuity test harness and fixtures in `tests/test_live_continuity.py`
 
 **Checkpoint**: Foundation complete. User stories can now proceed.
 
@@ -46,17 +46,17 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Add status-slot normalization tests for canonical `car_id` range in `tests/test_live_translation.py`
-- [ ] T011 [P] [US1] Add timer-slot normalization tests for canonical `car_id` mapping in `tests/test_live_translation.py`
-- [ ] T012 [P] [US1] Add active-car detection window tests in `tests/test_state_manager.py`
+- [X] T010 [P] [US1] Add status-slot normalization tests for canonical `car_id` range in `tests/test_live_translation.py`
+- [X] T011 [P] [US1] Add timer-slot normalization tests for canonical `car_id` mapping in `tests/test_live_translation.py`
+- [X] T012 [P] [US1] Add active-car detection window tests in `tests/test_state_manager.py`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement `CarSlotMapping` and `ActiveCarDetector` in `src/services/live_continuity.py`
-- [ ] T014 [US1] Apply canonical slot mapping and max-6 filtering in `src/carrera_client.py`
-- [ ] T015 [US1] Persist `active_car_ids` and `active_car_count` in snapshots in `src/state_manager.py`
-- [ ] T016 [US1] Render active car metrics in dashboard header in `src/dashboard.py`
-- [ ] T017 [US1] Display auto-detected active car count in running race view in `src/pages/race_management.py`
+- [X] T013 [US1] Implement `CarSlotMapping` and `ActiveCarDetector` in `src/services/live_continuity.py`
+- [X] T014 [US1] Apply canonical slot mapping and max-6 filtering in `src/carrera_client.py`
+- [X] T015 [US1] Persist `active_car_ids` and `active_car_count` in snapshots in `src/state_manager.py`
+- [X] T016 [US1] Render active car metrics in dashboard header in `src/dashboard.py`
+- [X] T017 [US1] Display auto-detected active car count in running race view in `src/pages/race_management.py`
 
 **Checkpoint**: US1 is fully functional and independently testable.
 
@@ -70,18 +70,18 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 ### Tests for User Story 2
 
-- [ ] T018 [P] [US2] Add replayed-crossing idempotency test in `tests/test_race_service_ingest.py`
-- [ ] T019 [P] [US2] Add reconnect lap continuity regression test in `tests/test_live_continuity.py`
-- [ ] T020 [P] [US2] Add startup recovery continuity test in `tests/test_race_runner.py`
+- [X] T018 [P] [US2] Add replayed-crossing idempotency test in `tests/test_race_service_ingest.py`
+- [X] T019 [P] [US2] Add reconnect lap continuity regression test in `tests/test_live_continuity.py`
+- [X] T020 [P] [US2] Add startup recovery continuity test in `tests/test_race_runner.py`
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Extend timer raw frame payload with `cu_timestamp_ms` in `src/carrera_client.py`
-- [ ] T022 [US2] Implement checkpoint load/save API in `src/services/live_continuity.py`
-- [ ] T023 [US2] Restore/update lap checkpoints during ingest in `src/services/race_service.py`
-- [ ] T024 [US2] Enforce idempotent lap ingest using repository identity checks in `src/repositories/race_repository.py`
-- [ ] T025 [US2] Update running-race recovery defaults for continuity in `src/config.py` and `src/services/race_service.py`
-- [ ] T026 [US2] Add structured continuity diagnostics in `src/services/race_service.py`
+- [X] T021 [US2] Extend timer raw frame payload with `cu_timestamp_ms` in `src/carrera_client.py`
+- [X] T022 [US2] Implement checkpoint load/save API in `src/services/live_continuity.py`
+- [X] T023 [US2] Restore/update lap checkpoints during ingest in `src/services/race_service.py`
+- [X] T024 [US2] Enforce idempotent lap ingest using repository identity checks in `src/repositories/race_repository.py`
+- [X] T025 [US2] Update running-race recovery defaults for continuity in `src/config.py` and `src/services/race_service.py`
+- [X] T026 [US2] Add structured continuity diagnostics in `src/services/race_service.py`
 
 **Checkpoint**: US2 is fully functional and independently testable.
 
@@ -95,17 +95,17 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Add link-health transition tests in `tests/test_live_idle_watchdog.py`
-- [ ] T028 [P] [US3] Add bluetooth hardening config validation tests in `tests/test_main_adapter_selection.py`
-- [ ] T029 [P] [US3] Add periodic-reconnect running-race guard test in `tests/test_live_ble_stability.py`
+- [X] T027 [P] [US3] Add link-health transition tests in `tests/test_live_idle_watchdog.py`
+- [X] T028 [P] [US3] Add bluetooth hardening config validation tests in `tests/test_main_adapter_selection.py`
+- [X] T029 [P] [US3] Add periodic-reconnect running-race guard test in `tests/test_live_ble_stability.py`
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Add new bluetooth liveness config fields in `src/config.py`
-- [ ] T031 [US3] Pass liveness and backoff knobs to runner wiring in `src/main.py`
-- [ ] T032 [US3] Emit degraded/stalled watchdog health states in `src/carrera_client.py`
-- [ ] T033 [US3] Implement optional periodic maintenance reconnect gate in `src/carrera_client.py` and `src/race_runner.py`
-- [ ] T034 [US3] Surface link-health reason metadata in snapshot and UI in `src/state_manager.py` and `src/dashboard.py`
+- [X] T030 [US3] Add new bluetooth liveness config fields in `src/config.py`
+- [X] T031 [US3] Pass liveness and backoff knobs to runner wiring in `src/main.py`
+- [X] T032 [US3] Emit degraded/stalled watchdog health states in `src/carrera_client.py`
+- [X] T033 [US3] Implement optional periodic maintenance reconnect gate in `src/carrera_client.py` and `src/race_runner.py`
+- [X] T034 [US3] Surface link-health reason metadata in snapshot and UI in `src/state_manager.py` and `src/dashboard.py`
 
 **Checkpoint**: US3 is fully functional and independently testable.
 
@@ -115,10 +115,10 @@ description: "Task list for Live Continuity Hardening follow-up (auto car detect
 
 **Purpose**: Final hardening, docs, and validation across all user stories.
 
-- [ ] T035 [P] Update operator troubleshooting and recovery guidance in `docs/troubleshooting.md`
-- [ ] T036 [P] Update verification flow and config examples in `specs/003-live-adapter-carreralib/quickstart.md`
-- [ ] T037 Run focused continuity verification command set from `specs/003-live-adapter-carreralib/quickstart.md`
-- [ ] T038 Run full quality gates and fix regressions across `src/` and `tests/`
+- [X] T035 [P] Update operator troubleshooting and recovery guidance in `docs/troubleshooting.md`
+- [X] T036 [P] Update verification flow and config examples in `specs/003-live-adapter-carreralib/quickstart.md`
+- [X] T037 Run focused continuity verification command set from `specs/003-live-adapter-carreralib/quickstart.md`
+- [X] T038 Run full quality gates and fix regressions across `src/` and `tests/`
 
 ---
 

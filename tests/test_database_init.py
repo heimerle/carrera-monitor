@@ -8,7 +8,15 @@ from sqlalchemy import inspect
 def test_init_db_creates_all_tables(engine):
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    assert {"races", "race_drivers", "race_laps", "race_events", "race_reports"} <= tables
+    assert {
+        "races",
+        "race_drivers",
+        "race_laps",
+        "race_events",
+        "race_reports",
+        "race_lap_checkpoints",
+        "race_lap_ingest_identities",
+    } <= tables
 
 
 def test_race_drivers_unique_constraint(engine):
@@ -28,3 +36,14 @@ def test_foreign_keys_enabled(engine):
     with engine.connect() as conn:
         result = conn.exec_driver_sql("PRAGMA foreign_keys").scalar()
         assert result == 1
+
+
+def test_continuity_tables_have_uniqueness_constraints(engine):
+    insp = inspect(engine)
+    checkpoint_uqs = insp.get_unique_constraints("race_lap_checkpoints")
+    checkpoint_cols = [tuple(u["column_names"]) for u in checkpoint_uqs]
+    assert ("race_id", "car_id") in checkpoint_cols
+
+    identity_uqs = insp.get_unique_constraints("race_lap_ingest_identities")
+    identity_cols = [tuple(u["column_names"]) for u in identity_uqs]
+    assert ("race_id", "car_id", "cu_timestamp_ms") in identity_cols

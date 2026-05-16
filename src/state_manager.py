@@ -24,6 +24,7 @@ from .event_model import (
     RaceState,
     TelemetryEvent,
 )
+from .services.live_continuity import ActiveCarDetector
 from .telemetry_processor import clamp_fuel, clamp_unit, update_best_lap
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class StateManager:
         state_file: Path,
         *,
         refresh_interval_ms: int = 1000,
+        active_car_window_ms: int = 3000,
         monotonic_clock: Callable[[], int] | None = None,
     ) -> None:
         self._queue = queue
@@ -65,6 +67,7 @@ class StateManager:
             since_ms=self._mono(),
         )
         self._recent: deque[TelemetryEvent] = deque(maxlen=_RECENT_EVENTS_MAX)
+        self._active_detector = ActiveCarDetector(window_ms=active_car_window_ms)
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._last_write_ms: int = 0
@@ -74,6 +77,15 @@ class StateManager:
     def apply(self, event: TelemetryEvent) -> None:
         """Apply one event to the in-memory state. Safe to call directly from tests."""
         self._recent.appendleft(event)
+
+        if event.car_id is not None and event.event_type in {
+            EventType.LAP,
+            EventType.FUEL,
+            EventType.PITLANE,
+            EventType.SPEED,
+            EventType.CONTROLLER_INPUT,
+        }:
+            self._active_detector.observe(event.car_id, event.timestamp_monotonic_ms)
 
         if event.event_type is EventType.LAP and event.car_id is not None:
             car = self._car(event.car_id)
@@ -102,24 +114,31 @@ class StateManager:
             _ = clamp_unit(float(event.payload["brake"]))
             car.last_event_at_ms = event.timestamp_monotonic_ms
         elif event.event_type is EventType.RACE_STATE:
-            new_race_state = RaceState(event.payload["state"])
-            if new_race_state is RaceState.IDLE and self._race_state is not RaceState.IDLE:
-                # Reset lap counts on transition to idle (data-model §3 invariant).
-                for car in self._cars.values():
-                    car.lap_count = 0
-            self._race_state = new_race_state
+            self._race_state = RaceState(event.payload["state"])
         elif event.event_type is EventType.CONNECTION_STATE:
             new_conn_state = ConnectionState(event.payload["state"])
             err = event.payload.get("error")
-            if new_conn_state is not self._connection.state:
+            reason = event.payload.get("reason")
+            timeout_streak = event.payload.get("timeout_streak")
+            if (
+                new_conn_state is not self._connection.state
+                or err != self._connection.last_error
+                or reason != self._connection.reason
+                or timeout_streak != self._connection.timeout_streak
+            ):
                 self._connection = ConnectionStateRecord(
                     state=new_conn_state,
                     since_ms=event.timestamp_monotonic_ms,
                     last_error=err,
+                    reason=reason if isinstance(reason, str) else None,
+                    timeout_streak=(
+                        int(timeout_streak) if isinstance(timeout_streak, int) else None
+                    ),
                 )
 
     def snapshot(self) -> dict[str, Any]:
         """JSON-serializable dict written to `state.json`."""
+        active = self._active_detector.snapshot(self._mono())
         return {
             "taken_at_iso": utils.now_iso().isoformat(),
             "taken_at_monotonic_ms": self._mono(),
@@ -127,8 +146,13 @@ class StateManager:
                 "state": self._connection.state.value,
                 "since_ms": self._connection.since_ms,
                 "last_error": self._connection.last_error,
+                "reason": self._connection.reason,
+                "timeout_streak": self._connection.timeout_streak,
             },
             "race": self._race_state.value,
+            "active_car_ids": active["active_car_ids"],
+            "active_car_count": active["active_car_count"],
+            "active_car_window_ms": active["window_ms"],
             "cars": [asdict(c) for c in sorted(self._cars.values(), key=lambda c: c.car_id)],
             "recent_events": [
                 self._event_to_dict(ev) for ev in list(self._recent)[:_RECENT_EVENTS_MAX]

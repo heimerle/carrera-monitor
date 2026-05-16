@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,25 @@ class BluetoothConfig(BaseModel):
     mac_address: str | None = None
     scan_timeout_seconds: int = Field(default=10, ge=1)
     reconnect_interval_seconds: int = Field(default=5, ge=1)
+    max_reconnect_interval_seconds: int = Field(default=30, ge=1)
     idle_timeout_seconds: int = Field(default=15, ge=3)
+    idle_warning_seconds: int = Field(default=5, ge=1)
+    periodic_forced_reconnect_seconds: int = Field(default=0, ge=0)
+    periodic_reconnect_only_when_not_running: bool = True
+
+    @model_validator(mode="after")
+    def _validate_backoff_and_watchdog(self) -> BluetoothConfig:
+        if self.max_reconnect_interval_seconds < self.reconnect_interval_seconds:
+            raise ValueError(
+                "bluetooth.max_reconnect_interval_seconds must be >= "
+                "bluetooth.reconnect_interval_seconds"
+            )
+        if self.idle_warning_seconds >= self.idle_timeout_seconds:
+            raise ValueError(
+                "bluetooth.idle_warning_seconds must be < "
+                "bluetooth.idle_timeout_seconds"
+            )
+        return self
 
 
 class LoggingConfig(BaseModel):
@@ -66,7 +84,7 @@ class RaceManagementConfig(BaseModel):
     allow_edit_running_race: bool = False
     # Stored as raw string (validated against RaceStatus in src/schemas).
     default_race_status_after_create: str = "draft"
-    recover_running_race: bool = False
+    recover_running_race: bool = True
 
 
 class AppConfig(BaseModel):

@@ -16,7 +16,10 @@
 .venv/bin/python -m pytest \
   tests/test_live_translation.py \
   tests/test_live_ble_stability.py \
+  tests/test_live_idle_watchdog.py \
   tests/test_race_service_ingest.py \
+  tests/test_race_runner.py \
+  tests/test_main_adapter_selection.py \
   tests/test_state_manager.py \
   tests/test_live_continuity.py -q
 ```
@@ -64,6 +67,8 @@ bluetooth:
   idle_warning_seconds: 5
   periodic_forced_reconnect_seconds: 0
   periodic_reconnect_only_when_not_running: true
+race_management:
+  recover_running_race: true
 ```
 
 ## 7. Troubleshooting checks

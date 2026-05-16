@@ -39,6 +39,8 @@ class ConnectionState(StrEnum):
     SCANNING = "scanning"
     CONNECTING = "connecting"
     CONNECTED = "connected"
+    DEGRADED = "degraded"
+    STALLED = "stalled"
     RECONNECTING = "reconnecting"
     ERROR = "error"
 
@@ -46,14 +48,14 @@ class ConnectionState(StrEnum):
 # Allowed payload keys per EventType. Unknown keys are rejected to catch typos
 # early (data-model §1 validation rules).
 _ALLOWED_PAYLOAD_KEYS: dict[EventType, set[str]] = {
-    EventType.LAP: {"lap_number", "lap_time_ms"},
+    EventType.LAP: {"lap_number", "lap_time_ms", "cu_timestamp_ms"},
     EventType.RACE_STATE: {"state"},
     EventType.FUEL: {"level_percent"},
     EventType.CONTROLLER_INPUT: {"throttle", "brake"},
     EventType.SPEED: {"speed_kmh"},
     EventType.BRAKE: {"brake"},
     EventType.PITLANE: {"in_pit", "reason"},
-    EventType.CONNECTION_STATE: {"state", "error"},
+    EventType.CONNECTION_STATE: {"state", "error", "reason", "timeout_streak"},
     EventType.RAW: set(),  # passthrough, raw_data carries the frame
     EventType.NOT_SUPPORTED: {"reason"},
 }
@@ -69,6 +71,8 @@ class ConnectionStateRecord(BaseModel):
     state: ConnectionState = ConnectionState.DISCONNECTED
     since_ms: int = Field(default=0, ge=0)
     last_error: str | None = None
+    reason: str | None = None
+    timeout_streak: int | None = Field(default=None, ge=0)
 
 
 class TelemetryEvent(BaseModel):
@@ -114,6 +118,11 @@ class TelemetryEvent(BaseModel):
                 raise ValueError("lap_number must be ≥ 1")
             if p["lap_time_ms"] < 0:
                 raise ValueError("lap_time_ms must be ≥ 0")
+            if "cu_timestamp_ms" in p:
+                if not isinstance(p["cu_timestamp_ms"], int):
+                    raise ValueError("cu_timestamp_ms must be an int")
+                if p["cu_timestamp_ms"] < 0:
+                    raise ValueError("cu_timestamp_ms must be ≥ 0")
         elif self.event_type is EventType.RACE_STATE:
             _require(p, "state", str)
             # Validate it's a known RaceState value (coerce via enum lookup).
@@ -148,6 +157,12 @@ class TelemetryEvent(BaseModel):
             ConnectionState(p["state"])
             if "error" in p and p["error"] is not None and not isinstance(p["error"], str):
                 raise ValueError("connection_state.error must be str or null")
+            if "reason" in p and p["reason"] is not None and not isinstance(p["reason"], str):
+                raise ValueError("connection_state.reason must be str or null")
+            if "timeout_streak" in p and (
+                not isinstance(p["timeout_streak"], int) or p["timeout_streak"] < 0
+            ):
+                raise ValueError("connection_state.timeout_streak must be int >= 0")
         elif self.event_type is EventType.NOT_SUPPORTED:
             _require(p, "reason", str)
         return self

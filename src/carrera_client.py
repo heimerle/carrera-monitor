@@ -26,6 +26,7 @@ from .event_model import (
     RaceState,
     TelemetryEvent,
 )
+from .services.live_continuity import CarSlotMapping, LinkHealthTracker, MappingMode
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class RawFrame(TypedDict, total=False):
     controller_id: int
     lap_number: int
     lap_time_ms: int
+    cu_timestamp_ms: int
     fuel_percent: float
     throttle: float
     brake: float
@@ -108,6 +110,12 @@ def translate_raw_frame(
     raw_data_for_primary: dict[str, Any] | None = None
 
     if kind == "lap":
+        payload: dict[str, Any] = {
+            "lap_number": int(frame["lap_number"]),
+            "lap_time_ms": int(frame["lap_time_ms"]),
+        }
+        if "cu_timestamp_ms" in frame:
+            payload["cu_timestamp_ms"] = int(frame["cu_timestamp_ms"])
         primary = TelemetryEvent(
             timestamp_iso=ts_iso,
             timestamp_monotonic_ms=ts_mono,
@@ -115,10 +123,7 @@ def translate_raw_frame(
             event_type=EventType.LAP,
             car_id=car_id,
             controller_id=controller_id,
-            payload={
-                "lap_number": int(frame["lap_number"]),
-                "lap_time_ms": int(frame["lap_time_ms"]),
-            },
+            payload=payload,
             metadata=metadata,
         )
     elif kind == "fuel":
@@ -303,6 +308,8 @@ class LiveCarreraAdapter:
         scan_timeout_seconds: int = 10,
         debug_raw: bool = False,
         idle_timeout_seconds: int = 15,
+        idle_warning_seconds: int = 5,
+        slot_mapping_mode: MappingMode = "zero_based",
         reset_on_connect: bool = True,
     ) -> None:
         self._scan_timeout = scan_timeout_seconds
@@ -312,6 +319,7 @@ class LiveCarreraAdapter:
         # recv() raises a TimeoutError every ~1s when idle, so this
         # value is roughly seconds-without-CU-data.
         self._idle_timeout_s = max(3, int(idle_timeout_seconds))
+        self._idle_warning_s = max(1, int(idle_warning_seconds))
         # Whether to call cu.reset() during connect(). On the first
         # connect of a session this resets the CU clock so lap times
         # start at 0; on a subsequent reconnect after a BLE drop we
@@ -325,6 +333,11 @@ class LiveCarreraAdapter:
         self._read_task: asyncio.Task[None] | None = None
         # Per-car translation state.
         self._prev_status: Any = None
+        self._slot_mapping = CarSlotMapping(mapping_mode=slot_mapping_mode)
+        self._link_health = LinkHealthTracker(
+            warning_threshold=self._idle_warning_s,
+            hard_threshold=self._idle_timeout_s,
+        )
         self._lap_counts: dict[int, int] = {}
         self._prev_lap_ts: dict[int, int] = {}
 
@@ -417,6 +430,13 @@ class LiveCarreraAdapter:
                     # traffic (stale/competing session — power-cycle the
                     # AppConnect or close other BLE apps).
                     timeout_streak += 1
+                    health = self._link_health.on_timeout()
+                    if health.state == "degraded":
+                        self._emit_link_health(
+                            ConnectionState.DEGRADED,
+                            reason=health.reason or "timeout_warning",
+                            timeout_streak=health.timeout_streak,
+                        )
                     if timeout_streak in (5, 10):
                         logger.warning(
                             "live: %d consecutive CU poll timeouts — "
@@ -425,6 +445,11 @@ class LiveCarreraAdapter:
                             timeout_streak,
                         )
                     if timeout_streak >= self._idle_timeout_s:
+                        self._emit_link_health(
+                            ConnectionState.STALLED,
+                            reason="timeout_streak_hard",
+                            timeout_streak=timeout_streak,
+                        )
                         # Bubble up so the runner closes the CU and
                         # rebuilds the BLE link from scratch.
                         raise AdapterReadError(
@@ -442,7 +467,13 @@ class LiveCarreraAdapter:
                         "live: CU poll recovered after %d timeouts",
                         timeout_streak,
                     )
+                    self._emit_link_health(
+                        ConnectionState.CONNECTED,
+                        reason="poll_recovered",
+                        timeout_streak=0,
+                    )
                     timeout_streak = 0
+                self._link_health.on_frame(utils.now_monotonic_ms())
                 poll_count += 1
                 if poll_count <= 3 or poll_count % 200 == 0:
                     logger.info(
@@ -493,6 +524,28 @@ class LiveCarreraAdapter:
             with contextlib.suppress(asyncio.QueueFull):
                 self._queue.put_nowait(ev)
 
+    def _emit_link_health(
+        self,
+        state: ConnectionState,
+        *,
+        reason: str,
+        timeout_streak: int,
+    ) -> None:
+        self._enqueue(
+            TelemetryEvent(
+                timestamp_iso=utils.now_iso(),
+                timestamp_monotonic_ms=utils.now_monotonic_ms(),
+                source=self.source_name,
+                event_type=EventType.CONNECTION_STATE,
+                payload={
+                    "state": state.value,
+                    "error": None,
+                    "reason": reason,
+                    "timeout_streak": int(timeout_streak),
+                },
+            )
+        )
+
     def _translate_status(self, status: Any) -> list[RawFrame]:
         """Diff the latest Status frame against the previous one and emit
         one RawFrame per per-car change plus a race_state frame when the
@@ -503,24 +556,30 @@ class LiveCarreraAdapter:
 
         # Fuel: per-car level (0..15).
         for i, fuel in enumerate(status.fuel):
+            car_id = self._slot_mapping.normalize_slot(i)
+            if car_id is None:
+                continue
             prev_fuel = prev.fuel[i] if prev is not None else None
             if prev_fuel != fuel:
                 out.append(
                     {
                         "kind": "fuel",
-                        "car_id": i + 1,
+                        "car_id": car_id,
                         "fuel_percent": float(fuel) * 100.0 / 15.0,
                     }
                 )
 
         # Pit: per-car in/out flag.
         for i, pit in enumerate(status.pit):
+            car_id = self._slot_mapping.normalize_slot(i)
+            if car_id is None:
+                continue
             prev_pit = prev.pit[i] if prev is not None else None
             if prev_pit != pit:
                 out.append(
                     {
                         "kind": "pitlane",
-                        "car_id": i + 1,
+                        "car_id": car_id,
                         "in_pit": bool(pit),
                         "pit_reason": "unknown",
                     }
@@ -551,20 +610,23 @@ class LiveCarreraAdapter:
         """
         addr = int(timer.address)
         ts = int(timer.timestamp)
-        car_id = addr + 1
-        prev_ts = self._prev_lap_ts.get(addr)
-        self._prev_lap_ts[addr] = ts
+        car_id = self._slot_mapping.normalize_slot(addr)
+        if car_id is None:
+            return []
+        prev_ts = self._prev_lap_ts.get(car_id)
+        self._prev_lap_ts[car_id] = ts
         if prev_ts is None:
             return []
         lap_time_ms = ts - prev_ts
-        lap_n = self._lap_counts.get(addr, 0) + 1
-        self._lap_counts[addr] = lap_n
+        lap_n = self._lap_counts.get(car_id, 0) + 1
+        self._lap_counts[car_id] = lap_n
         return [
             {
                 "kind": "lap",
                 "car_id": car_id,
                 "lap_number": lap_n,
                 "lap_time_ms": lap_time_ms,
+                "cu_timestamp_ms": ts,
             }
         ]
 
@@ -633,6 +695,9 @@ class CarreraClientRunner:
         reconnect_interval_seconds: int = 5,
         max_reconnect_interval_seconds: int = 30,
         idle_timeout_seconds: int = 15,
+        idle_warning_seconds: int = 5,
+        periodic_forced_reconnect_seconds: int = 0,
+        periodic_reconnect_only_when_not_running: bool = True,
         debug_raw: bool = False,
         monotonic_clock: Any = None,
         adapter_factory: Any = None,
@@ -646,13 +711,20 @@ class CarreraClientRunner:
         # Kept for backward compat with code/tests reading the attribute.
         self._reconnect_s = self._reconnect_initial_s
         self._idle_timeout_s = idle_timeout_seconds
+        self._idle_warning_s = max(1, int(idle_warning_seconds))
+        self._periodic_forced_reconnect_s = max(0, int(periodic_forced_reconnect_seconds))
+        self._periodic_reconnect_only_when_not_running = bool(
+            periodic_reconnect_only_when_not_running
+        )
         self._debug_raw = debug_raw
         self._mono = monotonic_clock or utils.now_monotonic_ms
+        self._latest_race_state: str | None = None
         self._adapter_factory = adapter_factory or (
             lambda: LiveCarreraAdapter(
                 scan_timeout_seconds=scan_timeout_seconds,
                 debug_raw=debug_raw,
                 idle_timeout_seconds=idle_timeout_seconds,
+                idle_warning_seconds=self._idle_warning_s,
             )
         )
         self._queue: asyncio.Queue[TelemetryEvent] = asyncio.Queue(maxsize=4096)
@@ -700,14 +772,26 @@ class CarreraClientRunner:
 
     # ----- Internals ------------------------------------------------------
 
-    async def _emit_connection(self, state: ConnectionState, error: str | None = None) -> None:
+    async def _emit_connection(
+        self,
+        state: ConnectionState,
+        error: str | None = None,
+        *,
+        reason: str | None = None,
+        timeout_streak: int | None = None,
+    ) -> None:
         self._state = state
+        payload: dict[str, Any] = {"state": state.value, "error": error}
+        if reason is not None:
+            payload["reason"] = reason
+        if timeout_streak is not None:
+            payload["timeout_streak"] = int(timeout_streak)
         ev = TelemetryEvent(
             timestamp_iso=utils.now_iso(),
             timestamp_monotonic_ms=self._mono(),
             source=self.source_name,
             event_type=EventType.CONNECTION_STATE,
-            payload={"state": state.value, "error": error},
+            payload=payload,
         )
         try:
             self._queue.put_nowait(ev)
@@ -716,6 +800,17 @@ class CarreraClientRunner:
                 _ = self._queue.get_nowait()
             with contextlib.suppress(asyncio.QueueFull):
                 self._queue.put_nowait(ev)
+
+    def _periodic_reconnect_due(self, connected_since_ms: int) -> bool:
+        if self._periodic_forced_reconnect_s <= 0:
+            return False
+        elapsed_s = max(0, (self._mono() - connected_since_ms) / 1000.0)
+        if elapsed_s < self._periodic_forced_reconnect_s:
+            return False
+        return not (
+            self._periodic_reconnect_only_when_not_running
+            and self._latest_race_state == RaceState.RUNNING.value
+        )
 
     async def _run(self) -> None:
         backoff_s = self._reconnect_initial_s
@@ -737,6 +832,7 @@ class CarreraClientRunner:
                 try:
                     await adapter.connect(self._mac)
                     await self._emit_connection(ConnectionState.CONNECTED)
+                    connected_since_ms = self._mono()
                     # Connect succeeded — reset the backoff so a fresh
                     # failure later doesn't inherit the previous penalty.
                     backoff_s = self._reconnect_initial_s
@@ -747,7 +843,11 @@ class CarreraClientRunner:
                         backoff_s,
                         exc,
                     )
-                    await self._emit_connection(ConnectionState.RECONNECTING, str(exc))
+                    await self._emit_connection(
+                        ConnectionState.RECONNECTING,
+                        str(exc),
+                        reason="connect_failed",
+                    )
                     self._current = None
                     if self._stop.is_set():
                         break
@@ -759,6 +859,10 @@ class CarreraClientRunner:
                 # Pump events
                 try:
                     async for ev in adapter.events():
+                        if ev.event_type is EventType.RACE_STATE:
+                            state_val = ev.payload.get("state")
+                            if isinstance(state_val, str):
+                                self._latest_race_state = state_val
                         try:
                             self._queue.put_nowait(ev)
                         except asyncio.QueueFull:
@@ -768,14 +872,29 @@ class CarreraClientRunner:
                                 self._queue.put_nowait(ev)
                         if self._stop.is_set():
                             break
+                        if self._periodic_reconnect_due(connected_since_ms):
+                            await self._emit_connection(
+                                ConnectionState.RECONNECTING,
+                                "periodic maintenance reconnect",
+                                reason="periodic_maintenance",
+                            )
+                            break
                 except AdapterReadError as exc:
                     logger.warning("runner: read error: %s", exc)
-                    await self._emit_connection(ConnectionState.RECONNECTING, str(exc))
+                    await self._emit_connection(
+                        ConnectionState.RECONNECTING,
+                        str(exc),
+                        reason="adapter_read_error",
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
                     logger.exception("runner: unexpected error during read")
-                    await self._emit_connection(ConnectionState.ERROR, str(exc))
+                    await self._emit_connection(
+                        ConnectionState.ERROR,
+                        str(exc),
+                        reason="unexpected_runner_error",
+                    )
                 finally:
                     with contextlib.suppress(Exception):
                         await adapter.disconnect()

@@ -8,6 +8,12 @@ bluetooth:
   mac_address: null
   scan_timeout_seconds: 10
   reconnect_interval_seconds: 5
+  max_reconnect_interval_seconds: 30
+  idle_timeout_seconds: 15
+  idle_warning_seconds: 5
+  # 0 disables periodic forced reconnect; liveness/watchdog remains primary.
+  periodic_forced_reconnect_seconds: 0
+  periodic_reconnect_only_when_not_running: true
 
 logging:
   # Directory for JSONL event logs and the dashboard state snapshot.
@@ -49,5 +55,5 @@ race_management:
   # Status assigned to newly created (and repeated) races.
   default_race_status_after_create: "draft"
   # On startup, if a race was left in status='running' (e.g. crash),
-  # re-attach to it (true) or auto-pause it (false, default).
-  recover_running_race: false
+  # re-attach to it by default to preserve continuity.
+  recover_running_race: true

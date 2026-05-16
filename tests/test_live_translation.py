@@ -44,7 +44,13 @@ def test_timer_second_crossing_emits_lap_with_diff_time() -> None:
     frames = adapter._translate_timer(_FakeTimer(address=0, timestamp=8_500))
 
     assert frames == [
-        {"kind": "lap", "car_id": 1, "lap_number": 1, "lap_time_ms": 7_500}
+        {
+            "kind": "lap",
+            "car_id": 1,
+            "lap_number": 1,
+            "lap_time_ms": 7_500,
+            "cu_timestamp_ms": 8_500,
+        }
     ]
 
 
@@ -57,10 +63,22 @@ def test_timer_lap_counts_are_per_car() -> None:
     out3 = adapter._translate_timer(_FakeTimer(address=3, timestamp=11_400))
 
     assert out0 == [
-        {"kind": "lap", "car_id": 1, "lap_number": 1, "lap_time_ms": 8_000}
+        {
+            "kind": "lap",
+            "car_id": 1,
+            "lap_number": 1,
+            "lap_time_ms": 8_000,
+            "cu_timestamp_ms": 9_000,
+        }
     ]
     assert out3 == [
-        {"kind": "lap", "car_id": 4, "lap_number": 1, "lap_time_ms": 10_200}
+        {
+            "kind": "lap",
+            "car_id": 4,
+            "lap_number": 1,
+            "lap_time_ms": 10_200,
+            "cu_timestamp_ms": 11_400,
+        }
     ]
 
 
@@ -70,8 +88,21 @@ def test_timer_lap_number_increments() -> None:
     adapter._translate_timer(_FakeTimer(address=2, timestamp=7_000))
     out = adapter._translate_timer(_FakeTimer(address=2, timestamp=14_500))
     assert out == [
-        {"kind": "lap", "car_id": 3, "lap_number": 2, "lap_time_ms": 7_500}
+        {
+            "kind": "lap",
+            "car_id": 3,
+            "lap_number": 2,
+            "lap_time_ms": 7_500,
+            "cu_timestamp_ms": 14_500,
+        }
     ]
+
+
+def test_timer_slot_normalization_drops_non_canonical_slots() -> None:
+    adapter = LiveCarreraAdapter()
+    adapter._translate_timer(_FakeTimer(address=6, timestamp=1_000))
+    out = adapter._translate_timer(_FakeTimer(address=6, timestamp=9_000))
+    assert out == []
 
 
 # --------------------------------------------------------- Status → diffs
@@ -86,14 +117,31 @@ def test_status_first_frame_emits_full_state() -> None:
     )
     frames = adapter._translate_status(status)
     kinds = [f["kind"] for f in frames]
-    # Eight per-car fuel frames + one race_state frame; no pit frames (all
-    # initial values are `False` but the diff against `prev is None`
-    # treats `None != False` → 8 pit frames too).
-    assert kinds.count("fuel") == 8
-    assert kinds.count("pitlane") == 8
+    # Canonical race domain is max 6 cars: slots 7/8 are dropped.
+    assert kinds.count("fuel") == 6
+    assert kinds.count("pitlane") == 6
     assert kinds.count("race_state") == 1
     race_frame = next(f for f in frames if f["kind"] == "race_state")
     assert race_frame["race_state"] == "running"
+
+
+def test_status_slot_normalization_keeps_car_ids_within_1_to_6() -> None:
+    adapter = LiveCarreraAdapter()
+    frames = adapter._translate_status(
+        _FakeStatus(
+            fuel=[15, 14, 13, 12, 11, 10, 9, 8],
+            pit=[False, False, False, False, False, False, True, True],
+            start=6,
+        )
+    )
+    car_ids = sorted(
+        {
+            int(f["car_id"])
+            for f in frames
+            if f["kind"] in {"fuel", "pitlane"}
+        }
+    )
+    assert car_ids == [1, 2, 3, 4, 5, 6]
 
 
 def test_status_second_frame_diffs_only_changed_fields() -> None:

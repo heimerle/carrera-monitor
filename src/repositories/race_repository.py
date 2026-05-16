@@ -15,10 +15,19 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from .._time import utcnow_naive
-from ..models import Race, RaceDriver, RaceEvent, RaceLap, RaceReport
+from ..models import (
+    Race,
+    RaceDriver,
+    RaceEvent,
+    RaceLap,
+    RaceLapCheckpoint,
+    RaceLapIngestIdentity,
+    RaceReport,
+)
 from ..schemas.race_schema import (
     DriverAssignment,
     RaceCreate,
@@ -259,6 +268,97 @@ class RaceRepository:
         )
         row = session.execute(stmt).scalar_one_or_none()
         return row
+
+    def get_lap_checkpoint(
+        self,
+        session: Session,
+        *,
+        race_id: int,
+        car_id: int,
+    ) -> RaceLapCheckpoint | None:
+        stmt = select(RaceLapCheckpoint).where(
+            RaceLapCheckpoint.race_id == race_id,
+            RaceLapCheckpoint.car_id == car_id,
+        )
+        return session.execute(stmt).scalar_one_or_none()
+
+    def list_lap_checkpoints(
+        self,
+        session: Session,
+        *,
+        race_id: int,
+    ) -> Sequence[RaceLapCheckpoint]:
+        stmt = (
+            select(RaceLapCheckpoint)
+            .where(RaceLapCheckpoint.race_id == race_id)
+            .order_by(RaceLapCheckpoint.car_id)
+        )
+        return session.execute(stmt).scalars().all()
+
+    def upsert_lap_checkpoint(
+        self,
+        session: Session,
+        *,
+        race_id: int,
+        car_id: int,
+        last_cu_timestamp_ms: int,
+        lap_count: int,
+        updated_at: datetime,
+    ) -> RaceLapCheckpoint:
+        row = self.get_lap_checkpoint(session, race_id=race_id, car_id=car_id)
+        if row is None:
+            row = RaceLapCheckpoint(
+                race_id=race_id,
+                car_id=car_id,
+                last_cu_timestamp_ms=last_cu_timestamp_ms,
+                lap_count=lap_count,
+                updated_at=updated_at,
+            )
+            session.add(row)
+        else:
+            row.last_cu_timestamp_ms = int(last_cu_timestamp_ms)
+            row.lap_count = int(lap_count)
+            row.updated_at = updated_at
+        session.flush()
+        return row
+
+    def insert_lap_identity_if_new(
+        self,
+        session: Session,
+        *,
+        race_id: int,
+        car_id: int,
+        cu_timestamp_ms: int,
+    ) -> bool:
+        savepoint = session.begin_nested()
+        try:
+            row = RaceLapIngestIdentity(
+                race_id=race_id,
+                car_id=car_id,
+                cu_timestamp_ms=cu_timestamp_ms,
+            )
+            session.add(row)
+            session.flush()
+            savepoint.commit()
+            return True
+        except IntegrityError:
+            savepoint.rollback()
+            return False
+
+    def count_laps_for_car(
+        self,
+        session: Session,
+        *,
+        race_id: int,
+        car_id: int,
+    ) -> int:
+        from sqlalchemy import func
+
+        stmt = select(func.count(RaceLap.id)).where(
+            RaceLap.race_id == race_id,
+            RaceLap.car_id == car_id,
+        )
+        return int(session.execute(stmt).scalar_one())
 
     # -- DTO helpers ----------------------------------------------------
 

@@ -6,6 +6,14 @@ can ``from src.services import RaceServiceError, RaceNotFoundError``.
 
 from __future__ import annotations
 
+from .live_continuity import (
+    ActiveCarDetector,
+    CarSlotMapping,
+    LinkHealthState,
+    LinkHealthTracker,
+    LiveContinuityService,
+)
+
 
 class RaceServiceError(Exception):
     """Base class for all race-service errors."""
@@ -44,7 +52,12 @@ def ensure_database_initialized() -> None:
 
 
 __all__ = [
+    "ActiveCarDetector",
+    "CarSlotMapping",
     "InvalidRaceStateError",
+    "LinkHealthState",
+    "LinkHealthTracker",
+    "LiveContinuityService",
     "RaceAlreadyRunningError",
     "RaceNotEditableError",
     "RaceNotFoundError",

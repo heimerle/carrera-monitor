@@ -7,7 +7,14 @@ from sqlalchemy.exc import IntegrityError
 
 from src._time import utcnow_naive
 from src.database import SessionLocal
-from src.models import RaceDriver, RaceEvent, RaceLap, RaceReport
+from src.models import (
+    RaceDriver,
+    RaceEvent,
+    RaceLap,
+    RaceLapCheckpoint,
+    RaceLapIngestIdentity,
+    RaceReport,
+)
 from src.repositories.race_repository import RaceRepository
 from src.schemas.race_schema import DriverAssignment, RaceCreate, RaceMode
 
@@ -143,3 +150,67 @@ def test_lap_count_by_car(engine, repo):
     with SessionLocal() as s:
         counts = repo.lap_count_by_car(s, rid)
         assert counts == {1: 3, 2: 1}
+
+
+def test_upsert_lap_checkpoint_creates_and_updates(engine, repo):
+    with SessionLocal() as s:
+        race = repo.create_race(s, _make_payload())
+        s.commit()
+        rid = race.id
+
+    with SessionLocal() as s:
+        first = repo.upsert_lap_checkpoint(
+            s,
+            race_id=rid,
+            car_id=1,
+            last_cu_timestamp_ms=1_000,
+            lap_count=1,
+            updated_at=utcnow_naive(),
+        )
+        s.commit()
+        assert first.lap_count == 1
+
+    with SessionLocal() as s:
+        second = repo.upsert_lap_checkpoint(
+            s,
+            race_id=rid,
+            car_id=1,
+            last_cu_timestamp_ms=2_000,
+            lap_count=2,
+            updated_at=utcnow_naive(),
+        )
+        s.commit()
+        assert second.id == first.id
+
+    with SessionLocal() as s:
+        rows = s.query(RaceLapCheckpoint).all()
+        assert len(rows) == 1
+        assert rows[0].last_cu_timestamp_ms == 2_000
+        assert rows[0].lap_count == 2
+
+
+def test_insert_lap_identity_if_new_is_idempotent(engine, repo):
+    with SessionLocal() as s:
+        race = repo.create_race(s, _make_payload())
+        s.commit()
+        rid = race.id
+
+    with SessionLocal() as s:
+        created = repo.insert_lap_identity_if_new(
+            s,
+            race_id=rid,
+            car_id=1,
+            cu_timestamp_ms=50_000,
+        )
+        duplicate = repo.insert_lap_identity_if_new(
+            s,
+            race_id=rid,
+            car_id=1,
+            cu_timestamp_ms=50_000,
+        )
+        s.commit()
+        assert created is True
+        assert duplicate is False
+
+    with SessionLocal() as s:
+        assert s.query(RaceLapIngestIdentity).count() == 1

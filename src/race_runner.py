@@ -48,6 +48,7 @@ class RaceTelemetryRunner:
         self._persist_all = persist_all_events
         self._ticker_interval = ticker_interval_s
         self._clock = clock
+        self._latest_race_state: str | None = None
         self._queue: asyncio.Queue[TelemetryEvent] | None = None
         self._consumer_task: asyncio.Task[None] | None = None
         self._ticker_task: asyncio.Task[None] | None = None
@@ -83,12 +84,20 @@ class RaceTelemetryRunner:
             raise
 
     async def _dispatch(self, event: TelemetryEvent) -> None:
+        if event.event_type is EventType.RACE_STATE:
+            state = event.payload.get("state")
+            if isinstance(state, str):
+                self._latest_race_state = state
         if ActiveRaceContext.get() is None:
             return
         if event.event_type is EventType.LAP:
             await asyncio.to_thread(self._svc.record_lap, event)
         elif self._persist_all:
             await asyncio.to_thread(self._svc.record_event, event)
+
+    @property
+    def latest_race_state(self) -> str | None:
+        return self._latest_race_state
 
     async def _fixed_duration_ticker(self) -> None:
         """Once per second, finish any running fixed_duration race that has elapsed."""

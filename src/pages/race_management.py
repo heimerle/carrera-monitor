@@ -8,11 +8,14 @@ US2 Repeat button.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 
 import streamlit as st
 
+from src.config import load_config
 from src.schemas.race_schema import (
     DriverAssignment,
     DurationUnit,
@@ -30,6 +33,18 @@ from src.services import (
 )
 from src.services.race_service import RaceService
 from src.services.reporting_service import ReportingService
+
+
+def _load_live_snapshot() -> dict[str, object] | None:
+    cfg_path = Path("config.yaml")
+    cfg = load_config(cfg_path if cfg_path.exists() else None)
+    state_path = Path(cfg.logging.directory) / "state.json"
+    try:
+        with open(state_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _get_service() -> RaceService:
@@ -248,6 +263,17 @@ def _render_running_view() -> None:
     label = st.selectbox("Select race", options=list(options.keys()))
     race = options[label]
     st.markdown(f"**{race.name}** — {_status_badge(race.status)} · mode `{race.mode.value}`")
+
+    snapshot = _load_live_snapshot()
+    if snapshot is not None:
+        active_raw = snapshot.get("active_car_count")
+        active_count = int(active_raw) if isinstance(active_raw, (int, float, str)) else 0
+        conn = snapshot.get("connection") if isinstance(snapshot.get("connection"), dict) else {}
+        reason = conn.get("reason") if isinstance(conn, dict) else None
+        details = f"Auto-detected active cars: {active_count}"
+        if isinstance(reason, str) and reason:
+            details += f" · link reason: {reason}"
+        st.caption(details)
 
     _render_race_controls(race)
 

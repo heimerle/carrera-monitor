@@ -187,7 +187,13 @@ async def run(args: argparse.Namespace) -> int:
             mac_address=cfg.bluetooth.mac_address,
             scan_timeout_seconds=cfg.bluetooth.scan_timeout_seconds,
             reconnect_interval_seconds=cfg.bluetooth.reconnect_interval_seconds,
+            max_reconnect_interval_seconds=cfg.bluetooth.max_reconnect_interval_seconds,
             idle_timeout_seconds=cfg.bluetooth.idle_timeout_seconds,
+            idle_warning_seconds=cfg.bluetooth.idle_warning_seconds,
+            periodic_forced_reconnect_seconds=cfg.bluetooth.periodic_forced_reconnect_seconds,
+            periodic_reconnect_only_when_not_running=(
+                cfg.bluetooth.periodic_reconnect_only_when_not_running
+            ),
             debug_raw=cfg.logging.debug_raw_enabled,
         )
         await adapter.connect(cfg.bluetooth.mac_address)

@@ -32,13 +32,18 @@ def _payload(name="R"):
 
 
 def _lap_event(lap_number: int) -> TelemetryEvent:
+    cu_ts = lap_number * 1000
     return TelemetryEvent(
         timestamp_iso=datetime.now(tz=UTC),
-        timestamp_monotonic_ms=lap_number * 1000,
+        timestamp_monotonic_ms=cu_ts,
         source="mock",
         event_type=EventType.LAP,
         car_id=1,
-        payload={"lap_number": lap_number, "lap_time_ms": 8000},
+        payload={
+            "lap_number": lap_number,
+            "lap_time_ms": 8000,
+            "cu_timestamp_ms": cu_ts,
+        },
     )
 
 
@@ -119,3 +124,29 @@ async def test_fixed_duration_ticker_auto_finishes(engine):
         await bus.close()
 
     assert svc.get_race(r.id).status is RaceStatus.FINISHED
+
+
+def test_startup_recovery_continues_running_race_laps(engine):
+    svc = RaceService()
+    r = svc.create_race(_payload("recover"))
+    svc.start_race(r.id)
+    svc.record_lap(_lap_event(1))
+
+    # Simulate process restart.
+    from src.race_context import ActiveRaceContext
+
+    ActiveRaceContext.clear()
+    recovered = RaceService()
+    recovered.recover_on_startup()
+    assert ActiveRaceContext.get() == r.id
+
+    recovered.record_lap(_lap_event(2))
+
+    with SessionLocal() as s:
+        laps = (
+            s.query(RaceLap)
+            .filter(RaceLap.race_id == r.id, RaceLap.car_id == 1)
+            .order_by(RaceLap.lap_number)
+            .all()
+        )
+        assert [row.lap_number for row in laps] == [1, 2]

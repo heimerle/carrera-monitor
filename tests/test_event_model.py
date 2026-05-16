@@ -46,13 +46,22 @@ class TestPayloadShapes:
         "event_type,payload",
         [
             (EventType.LAP, {"lap_number": 1, "lap_time_ms": 8000}),
+            (EventType.LAP, {"lap_number": 1, "lap_time_ms": 8000, "cu_timestamp_ms": 12345}),
             (EventType.RACE_STATE, {"state": "running"}),
             (EventType.FUEL, {"level_percent": 75.5}),
             (EventType.CONTROLLER_INPUT, {"throttle": 0.4, "brake": 0.0}),
             (EventType.SPEED, {"speed_kmh": 33.2}),
             (EventType.BRAKE, {"brake": 0.9}),
             (EventType.PITLANE, {"in_pit": True, "reason": "fuel"}),
-            (EventType.CONNECTION_STATE, {"state": "connected", "error": None}),
+            (
+                EventType.CONNECTION_STATE,
+                {
+                    "state": "degraded",
+                    "error": None,
+                    "reason": "timeout_streak_warning",
+                    "timeout_streak": 5,
+                },
+            ),
             (EventType.NOT_SUPPORTED, {"reason": "unknown frame"}),
         ],
     )

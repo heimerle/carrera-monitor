@@ -31,14 +31,23 @@ def _payload(name="R", lap_target=10):
     )
 
 
-def _lap(car_id: int, lap_number: int, lap_time_ms: int = 8000) -> TelemetryEvent:
+def _lap(
+    car_id: int,
+    lap_number: int,
+    lap_time_ms: int = 8000,
+    *,
+    cu_timestamp_ms: int | None = None,
+) -> TelemetryEvent:
+    payload = {"lap_number": lap_number, "lap_time_ms": lap_time_ms}
+    if cu_timestamp_ms is not None:
+        payload["cu_timestamp_ms"] = cu_timestamp_ms
     return TelemetryEvent(
         timestamp_iso=datetime.now(tz=UTC),
         timestamp_monotonic_ms=lap_number * 1000,
         source="mock",
         event_type=EventType.LAP,
         car_id=car_id,
-        payload={"lap_number": lap_number, "lap_time_ms": lap_time_ms},
+        payload=payload,
     )
 
 
@@ -50,6 +59,25 @@ def test_record_lap_persists(engine):
     svc.record_lap(_lap(2, 1))
     with SessionLocal() as s:
         assert s.query(RaceLap).count() == 2
+
+
+def test_record_lap_replayed_crossing_is_idempotent(engine):
+    svc = RaceService()
+    r = svc.create_race(_payload())
+    svc.start_race(r.id)
+
+    svc.record_lap(_lap(1, 1, cu_timestamp_ms=10_000))
+    svc.record_lap(_lap(1, 1, cu_timestamp_ms=10_000))
+
+    with SessionLocal() as s:
+        rows = (
+            s.query(RaceLap)
+            .filter(RaceLap.race_id == r.id, RaceLap.car_id == 1)
+            .order_by(RaceLap.lap_number)
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].lap_number == 1
 
 
 def test_record_lap_dropped_when_paused(engine):

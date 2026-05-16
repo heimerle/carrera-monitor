@@ -23,6 +23,7 @@ from typing import ClassVar
 
 import pytest
 
+from src import utils
 from src.carrera_client import (
     AdapterConnectionError,
     AdapterReadError,
@@ -268,3 +269,85 @@ def test_runner_init_clamps_max_to_initial() -> None:
     )
     assert runner._reconnect_max_s == 10
     assert runner._reconnect_initial_s == 10
+
+
+class _PeriodicAdapter:
+    """Adapter that keeps emitting running race-state frames."""
+
+    source_name = "carrera_appconnect"
+    connect_count: ClassVar[int] = 0
+
+    def __init__(self) -> None:
+        self._connected = False
+        self._reset_on_connect = True
+
+    async def connect(self, mac: str | None) -> None:
+        type(self).connect_count += 1
+        self._connected = True
+
+    async def disconnect(self) -> None:
+        self._connected = False
+
+    async def events(self):  # type: ignore[no-untyped-def]
+        while self._connected:
+            yield TelemetryEvent(
+                timestamp_iso=utils.now_iso(),
+                timestamp_monotonic_ms=utils.now_monotonic_ms(),
+                source="carrera_appconnect",
+                event_type=EventType.RACE_STATE,
+                payload={"state": "running"},
+            )
+            await asyncio.sleep(0)
+
+    async def discovered_devices(self) -> list[DiscoveredDevice]:
+        return []
+
+
+@pytest.mark.asyncio
+async def test_periodic_reconnect_is_blocked_while_race_running() -> None:
+    _PeriodicAdapter.connect_count = 0
+    tick = {"ms": 0}
+
+    def _mono() -> int:
+        tick["ms"] += 1_000
+        return tick["ms"]
+
+    runner = CarreraClientRunner(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        reconnect_interval_seconds=0,
+        max_reconnect_interval_seconds=0,
+        periodic_forced_reconnect_seconds=1,
+        periodic_reconnect_only_when_not_running=True,
+        monotonic_clock=_mono,
+        adapter_factory=_PeriodicAdapter,
+    )
+    await runner.connect(None)
+    await asyncio.sleep(0.05)
+    await runner.disconnect()
+
+    assert _PeriodicAdapter.connect_count == 1
+
+
+@pytest.mark.asyncio
+async def test_periodic_reconnect_runs_when_running_guard_disabled() -> None:
+    _PeriodicAdapter.connect_count = 0
+    tick = {"ms": 0}
+
+    def _mono() -> int:
+        tick["ms"] += 1_000
+        return tick["ms"]
+
+    runner = CarreraClientRunner(
+        mac_address="AA:BB:CC:DD:EE:FF",
+        reconnect_interval_seconds=0,
+        max_reconnect_interval_seconds=0,
+        periodic_forced_reconnect_seconds=1,
+        periodic_reconnect_only_when_not_running=False,
+        monotonic_clock=_mono,
+        adapter_factory=_PeriodicAdapter,
+    )
+    await runner.connect(None)
+    await asyncio.sleep(0.05)
+    await runner.disconnect()
+
+    assert _PeriodicAdapter.connect_count >= 2
