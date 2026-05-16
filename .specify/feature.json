@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/005-bluetooth-connection-supervisor"
+  "feature_directory": "specs/006-calm-connection-ui-restore-race-metrics"
 }
