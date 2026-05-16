@@ -303,6 +303,7 @@ class LiveCarreraAdapter:
         scan_timeout_seconds: int = 10,
         debug_raw: bool = False,
         idle_timeout_seconds: int = 15,
+        reset_on_connect: bool = True,
     ) -> None:
         self._scan_timeout = scan_timeout_seconds
         self._debug_raw = debug_raw
@@ -311,6 +312,12 @@ class LiveCarreraAdapter:
         # recv() raises a TimeoutError every ~1s when idle, so this
         # value is roughly seconds-without-CU-data.
         self._idle_timeout_s = max(3, int(idle_timeout_seconds))
+        # Whether to call cu.reset() during connect(). On the first
+        # connect of a session this resets the CU clock so lap times
+        # start at 0; on a subsequent reconnect after a BLE drop we
+        # MUST skip the reset or every following lap-time delta will
+        # be wrong (CU clock would restart mid-race).
+        self._reset_on_connect = bool(reset_on_connect)
         self._connected = False
         self._cu: Any = None
         self._devices: list[DiscoveredDevice] = []
@@ -363,10 +370,16 @@ class LiveCarreraAdapter:
 
         # Reset the CU timer so lap timestamps start at 0 for this session.
         # Non-fatal on failure; we just keep the existing CU clock.
-        try:
-            await asyncio.to_thread(self._cu.reset)
-        except Exception:  # pragma: no cover - hardware path
-            logger.exception("live: cu.reset() failed; continuing without reset")
+        # IMPORTANT: only reset on the very first connect of a session.
+        # Reconnects after a BLE drop MUST preserve the CU clock or all
+        # subsequent lap-time deltas will be off.
+        if self._reset_on_connect:
+            try:
+                await asyncio.to_thread(self._cu.reset)
+            except Exception:  # pragma: no cover - hardware path
+                logger.exception("live: cu.reset() failed; continuing without reset")
+        else:
+            logger.info("live: reconnect — preserving CU clock (skipping cu.reset)")
 
         self._connected = True
         self._read_task = asyncio.create_task(
@@ -465,6 +478,11 @@ class LiveCarreraAdapter:
             raise AdapterReadError(
                 f"live: read loop crashed: {exc}"
             ) from exc
+        finally:
+            # Guarantee `events()` notices the reader has exited even
+            # when we exit through an exception path; otherwise the
+            # consumer would spin on an idle queue forever.
+            self._connected = False
 
     def _enqueue(self, ev: TelemetryEvent) -> None:
         try:
@@ -564,12 +582,27 @@ class LiveCarreraAdapter:
             self._cu = None
 
     async def events(self) -> AsyncIterator[TelemetryEvent]:
-        while self._connected or not self._queue.empty():
+        while True:
+            # Surface a crashed reader task: if `_read_loop` raised
+            # AdapterReadError (idle watchdog, hardware failure, …),
+            # re-raise it here so the runner can rebuild the BLE link.
+            # We check the task BEFORE deciding to break on a clean
+            # `_connected=False` so consumers still see the exception
+            # after the reader's `finally` clause has run.
+            if (
+                self._read_task is not None
+                and self._read_task.done()
+                and self._queue.empty()
+            ):
+                exc = self._read_task.exception()
+                if exc is not None:
+                    raise exc
+                return
+            if not self._connected and self._queue.empty():
+                return
             try:
                 ev = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except TimeoutError:
-                if not self._connected:
-                    break
                 continue
             yield ev
 
@@ -598,6 +631,7 @@ class CarreraClientRunner:
         mac_address: str | None = None,
         scan_timeout_seconds: int = 10,
         reconnect_interval_seconds: int = 5,
+        max_reconnect_interval_seconds: int = 30,
         idle_timeout_seconds: int = 15,
         debug_raw: bool = False,
         monotonic_clock: Any = None,
@@ -605,7 +639,12 @@ class CarreraClientRunner:
     ) -> None:
         self._mac = mac_address
         self._scan_timeout = scan_timeout_seconds
-        self._reconnect_s = reconnect_interval_seconds
+        self._reconnect_initial_s = max(0, int(reconnect_interval_seconds))
+        self._reconnect_max_s = max(
+            self._reconnect_initial_s, int(max_reconnect_interval_seconds)
+        )
+        # Kept for backward compat with code/tests reading the attribute.
+        self._reconnect_s = self._reconnect_initial_s
         self._idle_timeout_s = idle_timeout_seconds
         self._debug_raw = debug_raw
         self._mono = monotonic_clock or utils.now_monotonic_ms
@@ -679,6 +718,8 @@ class CarreraClientRunner:
                 self._queue.put_nowait(ev)
 
     async def _run(self) -> None:
+        backoff_s = self._reconnect_initial_s
+        attempt = 0
         try:
             while not self._stop.is_set():
                 # Scan / connect
@@ -687,17 +728,32 @@ class CarreraClientRunner:
                 else:
                     await self._emit_connection(ConnectionState.CONNECTING)
                 adapter = self._adapter_factory()
+                # Only reset the CU clock on the very first attempt of
+                # the session. Subsequent reconnects (after BLE drop)
+                # must preserve the clock so lap-time deltas stay sane.
+                if attempt > 0 and hasattr(adapter, "_reset_on_connect"):
+                    adapter._reset_on_connect = False
                 self._current = adapter
                 try:
                     await adapter.connect(self._mac)
                     await self._emit_connection(ConnectionState.CONNECTED)
+                    # Connect succeeded — reset the backoff so a fresh
+                    # failure later doesn't inherit the previous penalty.
+                    backoff_s = self._reconnect_initial_s
                 except AdapterConnectionError as exc:
-                    logger.warning("runner: connect failed: %s", exc)
+                    logger.warning(
+                        "runner: connect failed (attempt %d, sleep %ds): %s",
+                        attempt + 1,
+                        backoff_s,
+                        exc,
+                    )
                     await self._emit_connection(ConnectionState.RECONNECTING, str(exc))
                     self._current = None
                     if self._stop.is_set():
                         break
-                    await asyncio.sleep(self._reconnect_s)
+                    await asyncio.sleep(backoff_s)
+                    backoff_s = min(max(1, backoff_s * 2), self._reconnect_max_s)
+                    attempt += 1
                     continue
 
                 # Pump events
@@ -727,7 +783,9 @@ class CarreraClientRunner:
 
                 if self._stop.is_set():
                     break
-                await asyncio.sleep(self._reconnect_s)
+                await asyncio.sleep(backoff_s)
+                backoff_s = min(max(1, backoff_s * 2), self._reconnect_max_s)
+                attempt += 1
         except asyncio.CancelledError:
             raise
         finally:
