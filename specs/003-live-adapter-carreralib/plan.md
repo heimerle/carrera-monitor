@@ -1,54 +1,42 @@
-# Implementation Plan: live-adapter-carreralib
+# Implementation Plan: Live Adapter Continuity Hardening
 
-**Branch**: `003-live-adapter-carreralib-plan` | **Date**: 2026-05-16 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/003-live-adapter-carreralib/spec.md`
-**Status**: Retroactive plan — feature is **already implemented on `main`** via PRs #9, #10, #12, #14.
+**Branch**: `main` | **Date**: 2026-05-16 | **Spec**: [spec.md](./spec.md)
+**Input**: Follow-up requirements for live reliability:
+1. Auto-detect number of cars in race (maximum 6)
+2. Preserve race data across reconnects
+3. Stabilize Bluetooth connection (heartbeat/probe policy)
 
 ## Summary
 
-Replace the placeholder BLE adapter with a production `LiveCarreraAdapter`
-built on top of the third-party `carreralib` library, add a one-shot
-`python -m src.main --scan` CLI mode for adapter discovery, and harden the
-surrounding `CarreraClientRunner` so live races survive transient Bluetooth
-disturbances without losing the CU's internal race clock.
-
-Approach (as shipped):
-
-- `LiveCarreraAdapter` (in [src/carrera_client.py](../../src/carrera_client.py)) owns the carreralib connection, a background reader task, an idle-frame watchdog, and a `_reset_on_connect` flag that gates `cu.reset()`.
-- `CarreraClientRunner` drives connect → consume `events()` → reconnect-with-backoff, using exponential backoff capped at `max_reconnect_interval_seconds` (default 30s).
-- `src/main.py` short-circuits to the scan path when `--scan` is set: it calls the carreralib scanner, prints `<MAC>\t<name>` lines to stdout, and exits `0` without touching DB / log files / dashboard.
-- `carreralib.TimeoutError` is treated as a non-fatal "no event this tick" / "transient connect stall" and routed through the reconnect path.
+Harden the existing live adapter pipeline to eliminate reconnect-related race discontinuities and phantom car slots. The plan introduces canonical car-slot normalization (cap 6), automatic active-car detection, durable lap checkpoint persistence across reconnect/restart, and a probe-driven reconnect strategy. The design keeps the existing event bus and race management architecture while adding targeted persistence and health-state layers.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11 and 3.12 (CI matrix on both)  
-**Primary Dependencies**: `carreralib` (third-party BLE/serial wrapper for Carrera Control Units), `asyncio` standard library, existing project modules (`TelemetryEvent`, `CarreraClientRunner` supervisor)  
-**Storage**: N/A for this slice (telemetry persistence lives in adjacent modules; this slice only produces `TelemetryEvent`s and a CLI side-effect-free scan)  
-**Testing**: `pytest` with `pytest-asyncio` patterns already in use; ruff (lint) and mypy strict on `src/`  
-**Target Platform**: macOS + Linux desktop hosts with BLE (Bluetooth Low Energy) or serial access to a Carrera Control Unit  
-**Project Type**: Single-project CLI + library (no frontend / backend split)  
-**Performance Goals**: Sustain the CU's native frame rate (≈ 1 frame / 100 ms during a race) without queue back-pressure; reconnect within `reconnect_interval_seconds + max_reconnect_interval_seconds` of a drop  
-**Constraints**: Must not call `cu.reset()` on reconnect attempts (`attempt > 0`) so the CU clock survives transient drops; `--scan` must have **zero** side effects beyond stdout; shutdown requests must interrupt the backoff sleep  
-**Scale/Scope**: Single CU per process; one host per race; the live adapter is the single producer of live `TelemetryEvent`s
+**Language/Version**: Python 3.11 / 3.12  
+**Primary Dependencies**: `carreralib`, `asyncio`, `pydantic`, `sqlalchemy`, `streamlit`  
+**Storage**: SQLite (`data/carrera_dashboard.sqlite3`), `logs/state.json`, JSONL telemetry logs  
+**Testing**: `pytest` unit/integration tests for translation, reconnect continuity, ingest idempotency, and state behavior  
+**Target Platform**: macOS and Linux hosts with optional BLE hardware  
+**Project Type**: Single Python application (`src/`, `tests/`)  
+**Performance Goals**:
+- Reconnect recovery visible within configured window (initial backoff + watchdog)
+- No lap continuity regression across reconnect in active race
+- Active car count converges within a short event window and is capped at 6
+**Constraints**:
+- Physical race capacity remains max 6 cars
+- Backward-compatible defaults for existing configs
+- Do not force reconnects on a fixed timer while race is running
+- No race data loss on reconnect/restart for active race
+**Scale/Scope**: Single local operator process controlling one active live pipeline and one race database
 
-## Constitution Check
+## Constitution Check (Pre-Design)
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+`.specify/memory/constitution.md` is a placeholder template with no enforceable ratified principles. Gate result: PASS (vacuous).
 
-The project's constitution at `.specify/memory/constitution.md` is the
-unratified template (placeholder principles `[PRINCIPLE_1_NAME]` … `[PRINCIPLE_5_NAME]`
-with no concrete MUST/SHOULD content). There are therefore no ratified
-principles to check against; this gate passes vacuously.
-
-If/when the constitution is ratified with concrete principles, this plan
-should be re-evaluated. Notable properties of the shipped code that any
-likely future principles would care about:
-
-- **Tests**: Each user-visible behavior has a corresponding test (`tests/test_live_translation.py`, `tests/test_live_ble_stability.py`, `tests/test_live_idle_watchdog.py`, `tests/test_main_adapter_selection.py`, `tests/test_adapter_contract.py`).
-- **CLI**: `python -m src.main --scan` honors stdin/args → stdout, errors → stderr, exit code 0 on success.
-- **Simplicity**: No new abstractions beyond what carreralib + the existing adapter contract require; `_reset_on_connect` is a single bool flag rather than a strategy object.
-
-**Result**: PASS (vacuous). Re-evaluated after Phase 1 design below — still PASS.
+Repository guardrails still apply and are enforced in this plan:
+- Minimal changes to existing architecture: PASS (targeted modules only)
+- Backward compatibility: PASS (new knobs default-safe)
+- Tests for behavior changes: PASS (explicit new tests listed in quickstart/contract)
 
 ## Project Structure
 
@@ -56,45 +44,85 @@ likely future principles would care about:
 
 ```text
 specs/003-live-adapter-carreralib/
-├── spec.md              # Retroactive feature spec (already authored)
-├── plan.md              # This file (/speckit.plan output)
-├── research.md          # Phase 0 output — retroactive decisions log
-├── data-model.md        # Phase 1 output — entities (adapter, runner, events)
-├── quickstart.md        # Phase 1 output — operator-facing scan + live walkthrough
+├── spec.md
+├── plan.md
+├── research.md
+├── data-model.md
+├── quickstart.md
 ├── contracts/
-│   └── live-adapter.md  # Phase 1 output — adapter contract + --scan CLI contract
-├── checklists/
-│   └── requirements.md  # Authored by /speckit.specify (already present)
-└── tasks.md             # Phase 2 output (/speckit.tasks — generated separately)
+│   ├── live-adapter.md
+│   └── live-reliability-hardening.md
+└── tasks.md
 ```
 
-### Source Code (repository root, as shipped)
+### Source Code (planned impact)
 
 ```text
 src/
-├── carrera_client.py            # LiveCarreraAdapter + CarreraClientRunner (PRs #9/#10/#12/#14)
-├── main.py                      # CLI entry; --scan short-circuit (PR #9)
-├── mock_client.py               # Mock adapter (unchanged by this slice)
-├── event_model.py               # TelemetryEvent schema (consumed, not modified)
-└── … (db, dashboard, race controls, etc.)
+├── carrera_client.py              # slot normalization, reconnect continuity hooks
+├── race_runner.py                 # dispatch behavior for continuity events
+├── services/
+│   ├── race_service.py            # durable lap checkpoint + idempotent ingest
+│   └── (new) live_continuity.py   # persistence + restore helpers
+├── state_manager.py               # race state reset guard on reconnect noise
+├── config.py                      # optional link-health knobs
+├── models.py                      # checkpoint schema (migration-backed)
+└── dashboard.py                   # show active car auto-detection and health hints
 
 tests/
-├── test_adapter_contract.py     # Shared adapter contract — LiveCarreraAdapter conforms
-├── test_live_translation.py     # Status/Timer → TelemetryEvent translation
-├── test_live_ble_stability.py   # Reader-task failure, cu.reset skip, exp backoff (PR #14)
-├── test_live_idle_watchdog.py   # Idle watchdog forces reconnect (PR #12)
-└── test_main_adapter_selection.py  # --scan path + mock-vs-live selection
+├── test_live_translation.py
+├── test_live_ble_stability.py
+├── test_race_service_ingest.py
+├── test_state_manager.py
+└── test_live_continuity.py        # new focused coverage
 ```
 
-**Structure Decision**: Single-project Python CLI/library layout (Option 1).
-No frontend/backend split. All live-adapter code lives in
-[src/carrera_client.py](../../src/carrera_client.py); all tests for this
-slice live directly under [tests/](../../tests/).
+**Structure Decision**: Keep single-project structure; add one narrowly scoped service module for continuity persistence instead of broader architectural refactor.
+
+## Phase 0: Outline & Research
+
+Research outcomes are captured in [research.md](./research.md) and resolve the core unknowns:
+- Canonical max-6 car identity under mixed hardware slot semantics
+- Reconnect/restart lap continuity and race-state persistence
+- Probe-driven link stabilization vs periodic forced reconnect
+
+## Phase 1: Design & Contracts
+
+### Data Model
+
+Runtime and persistence entities are documented in [data-model.md](./data-model.md), including:
+- `CarSlotMapping`
+- `ActiveCarSet`
+- `LiveLapCheckpoint`
+- `LinkHealthState`
+
+### Interface Contracts
+
+Behavioral contract for normalization, persistence, reconnect policy, and config knobs is documented in [contracts/live-reliability-hardening.md](./contracts/live-reliability-hardening.md).
+
+### Quickstart
+
+Operator/developer verification flow is documented in [quickstart.md](./quickstart.md).
+
+### Agent Context Update
+
+Updated SPECKIT plan pointer in `.github/copilot-instructions.md` to this plan path:
+`specs/003-live-adapter-carreralib/plan.md`.
+
+## Constitution Check (Post-Design)
+
+Re-evaluated after research + design artifacts: PASS.
+
+- Minimal-change gate: PASS (incremental hardening, no architecture replacement)
+- Backward-compat gate: PASS (new behavior constrained to live mode pathways)
+- Test gate: PASS (new tests mandated before merge)
 
 ## Complexity Tracking
 
-No constitution violations to justify (the constitution is unratified).
-The shipped implementation introduces no extra projects, no new persistence
-layer, no new service boundary. The single non-obvious mechanism — skipping
-`cu.reset()` on reconnect attempts > 0 — is justified directly by FR-006
-(preserve CU clock across drops) and has dedicated tests.
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| Additional persistence entity for checkpoints | Needed to preserve lap continuity across reconnect/restart | In-memory-only state loses continuity on adapter recreation/process restart |
+
+## Phase 2: Task Planning Endpoint
+
+Planning stops at design artifacts by intent. Task decomposition follows in `tasks.md` (`speckit.tasks`).

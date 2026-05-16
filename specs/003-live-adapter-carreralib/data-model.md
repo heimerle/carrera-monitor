@@ -1,105 +1,127 @@
-# Data Model: live-adapter-carreralib
+# Data Model: Live Continuity Hardening
 
-**Feature**: 003-live-adapter-carreralib
-**Date**: 2026-05-16
-**Status**: Retroactive — describes shipped entities in [src/carrera_client.py](../../src/carrera_client.py).
-
-This slice does not introduce a persistent storage schema. The entities
-below are runtime objects (Python classes / dataclasses) that participate
-in the live-adapter pipeline.
+**Feature**: 003-live-adapter-carreralib  
+**Date**: 2026-05-16  
+**Scope**: Auto car detection (max 6), reconnect persistence, and link-health stabilization.
 
 ## Entities
 
-### `LiveCarreraAdapter`
+### 1. `CarSlotMapping` (runtime)
 
-Production telemetry adapter that wraps carreralib.
+Canonicalizes hardware slot/address values into race-domain `car_id` values.
 
-| Field / Attribute | Type | Description |
+| Field | Type | Description |
 |---|---|---|
-| `_cu` | `carreralib.ControlUnit \| None` | Underlying carreralib connection; `None` when disconnected. |
-| `_read_task` | `asyncio.Task[None] \| None` | Background task pumping carreralib frames into `_queue`. |
-| `_queue` | `asyncio.Queue[TelemetryEvent]` | Buffer between the reader task and `events()` consumers. |
-| `_connected` | `bool` | True while a carreralib connection is open; flipped to `False` in `_read_loop`'s `finally`. |
-| `_reset_on_connect` | `bool` (default `True`) | Gate for `cu.reset()`; runner clears it for `attempt > 0`. |
-| `_idle_timeout_s` | `float` | Idle-frame watchdog window (PR #12). |
-| `_last_frame_at` | `float` | Monotonic timestamp of the last `Status`/`Timer` event; used by the watchdog. |
-| `_reader_error` | `BaseException \| None` | Exception stored by `_read_loop` for surfacing through `events()`. |
+| `mapping_mode` | `Literal["zero_based", "one_based", "explicit"]` | How raw slot values are interpreted. |
+| `slot_to_car_id` | `dict[int, int]` | Canonical mapping into `1..6`. |
+| `locked` | `bool` | When true, mapping remains stable for the race session. |
+| `source` | `Literal["status", "timer", "config"]` | Origin used to build mapping. |
 
-**Invariants**:
+**Validation Rules**:
+- Mapped `car_id` values MUST be within `1..6`.
+- A single raw slot MUST map to exactly one canonical `car_id` in a session.
+- Mapping lock MUST only change at race boundaries (start/new race).
 
-- After a successful `connect()`, exactly one `_read_task` is running.
-- `_reset_on_connect` is the **only** flag controlling `cu.reset()`; the
-  runner sets it via `hasattr(adapter, "_reset_on_connect")` to preserve the
-  zero-arg adapter factory contract.
-- `events()` MUST re-raise `_reader_error` once the queue is empty and the
-  reader task is done.
+### 2. `ActiveCarSet` (runtime + snapshot)
 
-**State transitions** (high-level):
+Represents auto-detected active cars in the current session.
 
-```text
-DISCONNECTED ──connect()──► CONNECTED (reader running, watchdog armed)
-CONNECTED ──reader exception OR watchdog idle──► DISCONNECTED (with _reader_error set)
-CONNECTED ──close()──► DISCONNECTED (clean; _reader_error = None)
-```
-
-### `CarreraClientRunner`
-
-Async supervisor that drives the adapter lifecycle.
-
-| Field / Attribute | Type | Description |
+| Field | Type | Description |
 |---|---|---|
-| `_adapter_factory` | `Callable[[], LiveCarreraAdapter]` | Zero-arg callable that produces a fresh adapter per run loop. |
-| `_reconnect_initial_s` | `float` | Initial reconnect sleep (was `reconnect_interval_seconds`). |
-| `_reconnect_max_s` | `float` | Cap on backoff sleep, clamped to be ≥ `_reconnect_initial_s`. Default `30`. |
-| `_reconnect_s` | `float` | Back-compat alias preserved for callers; mirrors `_reconnect_initial_s`. |
-| `_stop` | `asyncio.Event` | Set by external shutdown; checked between reconnect attempts. |
+| `active_car_ids` | `list[int]` | Sorted unique canonical IDs currently active. |
+| `active_car_count` | `int` | Number of active cars (`1..6`, derived). |
+| `last_seen_ms` | `dict[int, int]` | Last monotonic activity timestamp per car. |
+| `window_ms` | `int` | Detection horizon for activity. |
 
-**Behavior**:
+**Validation Rules**:
+- `active_car_count == len(active_car_ids)`.
+- `active_car_count` is capped at 6.
+- IDs in `active_car_ids` MUST be in `1..6`.
 
-- On `attempt == 0`: connect and (if the adapter supports it) leave `_reset_on_connect` at its default `True`.
-- On `attempt > 0`: set `adapter._reset_on_connect = False` via `hasattr` guard before calling `adapter.connect()`.
-- On connect or read failure: `backoff_s = min(backoff_s * 2, _reconnect_max_s)`; sleep that long (cancellable); increment attempt.
-- On successful connect: reset `backoff_s` to `_reconnect_initial_s` and reset `attempt = 0` for the next failure cycle.
-- On `_stop` set during sleep: exit the loop cleanly without raising.
+### 3. `LiveLapCheckpoint` (persistent)
 
-### `TelemetryEvent` (consumed, not defined here)
+Durable continuity checkpoint for reconnect and process restart.
 
-Existing project schema produced by the adapter. `TelemetryEvent.source` is set to the adapter's `source_name` — `"carrera_appconnect"` for the live adapter ([src/carrera_client.py](../../../src/carrera_client.py)) and `"mock"` for [src/mock_client.py](../../../src/mock_client.py). The live adapter translates
-two carreralib payload types into this schema:
-
-| carreralib source | Project event | Notes |
+| Field | Type | Description |
 |---|---|---|
-| `carreralib.Status` | `TelemetryEvent` of kind `status` | Race-state snapshot (lights, fuel, button states). |
-| `carreralib.Timer` | `TelemetryEvent` of kind `timer` | Per-car lap timing record. |
+| `id` | `int` | PK |
+| `race_id` | `int` | FK to race |
+| `car_id` | `int` | Canonical car ID (`1..6`) |
+| `last_cu_timestamp_ms` | `int` | Last CU crossing timestamp used for lap delta |
+| `lap_count` | `int` | Last accepted lap count |
+| `updated_at` | `datetime` | Last checkpoint update |
 
-Translation is exercised by [tests/test_live_translation.py](../../tests/test_live_translation.py).
+**Constraints**:
+- Unique `(race_id, car_id)`.
+- `lap_count >= 0`.
+- `last_cu_timestamp_ms >= 0`.
 
-### Scan result line (transient, stdout-only)
+### 4. `LapIngestIdentity` (persistent uniqueness)
 
-Not a Python entity; a single line of CLI output produced by `python -m src.main --scan`.
+Idempotency identity for lap insert path.
 
-| Field | Format | Description |
+| Field | Type | Description |
 |---|---|---|
-| MAC | colon-separated 6-byte hex (uppercase) | Bluetooth address of the discovered CU. |
-| `\t` | literal tab | Separator. |
-| name | UTF-8 string | Advertised device name (e.g. `Control_Unit`). |
-| `\n` | LF | Line terminator. |
+| `race_id` | `int` | Race scope |
+| `car_id` | `int` | Canonical car |
+| `cu_timestamp_ms` | `int` | Raw crossing identity from CU clock |
 
-One line per discovered device; zero lines on an empty scan; no JSON wrapper.
+**Constraint**:
+- Unique `(race_id, car_id, cu_timestamp_ms)` to avoid duplicate writes during reconnect replay.
+
+### 5. `LinkHealthState` (runtime + event)
+
+Health state used for reconnect decisions and observability.
+
+| Field | Type | Description |
+|---|---|---|
+| `state` | `Literal["healthy", "degraded", "stalled", "reconnecting"]` | Link-health state machine |
+| `timeout_streak` | `int` | Consecutive poll timeouts |
+| `last_frame_at_ms` | `int` | Last successful frame timestamp |
+| `reason` | `str | None` | Most recent transition reason |
 
 ## Relationships
 
 ```text
-CarreraClientRunner ──owns──► LiveCarreraAdapter ──wraps──► carreralib.ControlUnit
-        │                              │
-        │                              └──pumps──► asyncio.Queue ──drains──► events() ──► TelemetryEvent stream
-        │
-        └──forwards TelemetryEvents to the rest of the pipeline (out of scope for this slice)
+LiveCarreraAdapter
+  └─ produces raw per-slot events
+      └─ CarSlotMapping normalizes slot -> car_id (1..6)
+          ├─ ActiveCarSet tracks active_car_ids/count
+          └─ RaceTelemetryRunner / RaceService ingest
+              ├─ LapIngestIdentity enforces idempotency
+              └─ LiveLapCheckpoint persists continuity
+
+LinkHealthState (watchdog/probe) drives reconnect transitions and diagnostics.
 ```
 
-## Validation Rules
+## State Transitions
 
-- `max_reconnect_interval_seconds < reconnect_interval_seconds` → clamp max to initial (D-006).
-- `_reset_on_connect` MUST be `False` whenever the runner is on attempt > 0 (FR-006, SC-003).
-- `events()` MUST NOT swallow reader-task exceptions (FR-005).
-- `--scan` MUST produce zero side effects beyond stdout (FR-008, SC-005).
+### A. Link-health transitions
+
+```text
+healthy -> degraded      (timeout_streak >= warning threshold)
+degraded -> stalled      (timeout_streak >= hard threshold)
+stalled -> reconnecting  (reconnect initiated)
+reconnecting -> healthy  (first valid frame after reconnect)
+```
+
+### B. Active car detection lifecycle
+
+```text
+empty -> learning -> stable
+stable -> learning (on race restart or explicit remap)
+```
+
+### C. Lap continuity lifecycle
+
+```text
+checkpoint_miss -> checkpoint_seeded -> checkpoint_updated (per lap)
+checkpoint_updated -> restored (after reconnect/startup)
+```
+
+## Invariants
+
+- Race-domain car IDs used for persistence/reporting MUST remain in `1..6`.
+- Reconnect MUST NOT reset persisted lap continuity for active race.
+- Dashboard lap counters MUST NOT reset due to transient reconnect noise alone.
+- Idempotent lap ingest MUST treat replayed crossings as no-op, not failure.
