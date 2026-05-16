@@ -221,7 +221,7 @@ def _render_header(state: dict[str, Any]) -> None:
             f"⚠ {last_err}</span>"
         )
 
-    st.markdown(
+    st.html(
         dedent(
             f"""\
             <div class="cm-header">
@@ -239,8 +239,7 @@ def _render_header(state: dict[str, Any]) -> None:
                 </div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
 
 
@@ -339,7 +338,7 @@ def _render_leaderboard(state: dict[str, Any]) -> None:
         f"<tbody>{''.join(rows_html)}</tbody>"
         "</table>"
     )
-    st.markdown(table_html, unsafe_allow_html=True)
+    st.html(table_html)
 
 
 def _render_recent(state: dict[str, Any]) -> None:
@@ -387,9 +386,8 @@ def _render_body(state_file: Path, refresh_ms: int) -> None:
 
     snap_iso = state.get("taken_at_iso")
     if snap_iso:
-        st.markdown(
-            f'<div class="cm-footer-meta">snapshot · {snap_iso} · refresh {refresh_ms} ms</div>',
-            unsafe_allow_html=True,
+        st.html(
+            f'<div class="cm-footer-meta">snapshot · {snap_iso} · refresh {refresh_ms} ms</div>'
         )
 
 
@@ -400,7 +398,7 @@ def render() -> None:
         initial_sidebar_state="collapsed",
         page_icon="🏁",
     )
-    st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
+    st.html(_GLOBAL_CSS)
 
     cfg_path = Path("config.yaml")
     cfg = load_config(cfg_path if cfg_path.exists() else None)
@@ -423,9 +421,8 @@ def render() -> None:
     if st_autorefresh is not None:
         st_autorefresh(interval=refresh_ms, key="carrera_refresh")
     else:  # pragma: no cover - last-resort fallback
-        st.markdown(
-            f'<meta http-equiv="refresh" content="{max(1, refresh_ms // 1000)}">',
-            unsafe_allow_html=True,
+        st.html(
+            f'<meta http-equiv="refresh" content="{max(1, refresh_ms // 1000)}">'
         )
     _render_body(state_file, refresh_ms)
 
