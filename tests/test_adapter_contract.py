@@ -96,6 +96,18 @@ def test_fake_live_satisfies_protocol() -> None:
     assert isinstance(FakeLiveAdapter(), CarreraAdapter)
 
 
+@pytest.mark.parametrize("car_id", [7, 8])
+def test_translate_raw_frame_accepts_live_high_car_slots(car_id: int) -> None:
+    events = translate_raw_frame(
+        {"kind": "fuel", "car_id": car_id, "fuel_percent": 50.0},
+        "carrera_appconnect",
+    )
+
+    assert len(events) == 1
+    assert events[0].event_type is EventType.FUEL
+    assert events[0].car_id == car_id
+
+
 # ---------------------------------------------------------------------------
 # Both adapters emit canonical events with required types
 # ---------------------------------------------------------------------------
