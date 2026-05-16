@@ -302,9 +302,15 @@ class LiveCarreraAdapter:
         *,
         scan_timeout_seconds: int = 10,
         debug_raw: bool = False,
+        idle_timeout_seconds: int = 15,
     ) -> None:
         self._scan_timeout = scan_timeout_seconds
         self._debug_raw = debug_raw
+        # Force a reconnect through the runner if cu.poll() returns no
+        # traffic for this many consecutive seconds. carreralib's BLE
+        # recv() raises a TimeoutError every ~1s when idle, so this
+        # value is roughly seconds-without-CU-data.
+        self._idle_timeout_s = max(3, int(idle_timeout_seconds))
         self._connected = False
         self._cu: Any = None
         self._devices: list[DiscoveredDevice] = []
@@ -398,13 +404,20 @@ class LiveCarreraAdapter:
                     # traffic (stale/competing session — power-cycle the
                     # AppConnect or close other BLE apps).
                     timeout_streak += 1
-                    if timeout_streak in (5, 30, 120) or timeout_streak % 600 == 0:
+                    if timeout_streak in (5, 10):
                         logger.warning(
                             "live: %d consecutive CU poll timeouts — "
-                            "AppConnect may have stopped forwarding "
-                            "(try power-cycling it or closing other BLE apps)",
+                            "BLE link looks idle (AppConnect may have "
+                            "stopped forwarding)",
                             timeout_streak,
                         )
+                    if timeout_streak >= self._idle_timeout_s:
+                        # Bubble up so the runner closes the CU and
+                        # rebuilds the BLE link from scratch.
+                        raise AdapterReadError(
+                            f"BLE link idle for {timeout_streak}s — "
+                            "forcing reconnect"
+                        ) from None
                     continue
                 except Exception as exc:  # pragma: no cover - hardware path
                     raise AdapterReadError(
@@ -585,6 +598,7 @@ class CarreraClientRunner:
         mac_address: str | None = None,
         scan_timeout_seconds: int = 10,
         reconnect_interval_seconds: int = 5,
+        idle_timeout_seconds: int = 15,
         debug_raw: bool = False,
         monotonic_clock: Any = None,
         adapter_factory: Any = None,
@@ -592,12 +606,14 @@ class CarreraClientRunner:
         self._mac = mac_address
         self._scan_timeout = scan_timeout_seconds
         self._reconnect_s = reconnect_interval_seconds
+        self._idle_timeout_s = idle_timeout_seconds
         self._debug_raw = debug_raw
         self._mono = monotonic_clock or utils.now_monotonic_ms
         self._adapter_factory = adapter_factory or (
             lambda: LiveCarreraAdapter(
                 scan_timeout_seconds=scan_timeout_seconds,
                 debug_raw=debug_raw,
+                idle_timeout_seconds=idle_timeout_seconds,
             )
         )
         self._queue: asyncio.Queue[TelemetryEvent] = asyncio.Queue(maxsize=4096)
