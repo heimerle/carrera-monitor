@@ -10,6 +10,7 @@ from typing import Any
 
 import streamlit as st
 
+from src import utils
 from src.config import load_config
 
 # Optional auto-refresh dep (used when st.fragment is unavailable).
@@ -74,7 +75,7 @@ def _connection_color(state: str) -> str:
         "healthy": "#22C55E",
         "subscribing": "#F59E0B",
         "degraded": "#F59E0B",
-        "stale": "#EF4444",
+        "stale": "#F97316",
         "stalled": "#EF4444",
         "connecting": "#F59E0B",
         "scanning": "#F59E0B",
@@ -82,7 +83,22 @@ def _connection_color(state: str) -> str:
         "error": "#EF4444",
         "manually_disconnected": "#6B7280",
         "disconnected": "#6B7280",
-    }.get(state, "#6B7280")
+    }.get(state, "#9CA3AF")
+
+
+def _connection_icon(state: str) -> str:
+    s = str(state or "").lower()
+    if s in {"ready", "connected"}:
+        return "🟢"
+    if s in {"connecting", "scanning", "subscribing", "reconnecting"}:
+        return "🟡"
+    if s == "stale":
+        return "🟠"
+    if s == "error":
+        return "🔴"
+    if s in {"disconnected", "manually_disconnected"}:
+        return "⚫"
+    return "⚪"
 
 
 def _race_color(state: str) -> str:
@@ -100,6 +116,261 @@ def _fuel_color(pct: float) -> str:
     if pct >= 20:
         return "#F59E0B"
     return "#EF4444"
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _as_int_keyed_dict(value: Any) -> dict[int, Any]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[int, Any] = {}
+    for key, item in value.items():
+        if isinstance(key, int):
+            normalized[key] = item
+            continue
+        if isinstance(key, str):
+            try:
+                normalized[int(key)] = item
+            except ValueError:
+                continue
+    return normalized
+
+
+def _normalize_car_metric(raw: dict[str, Any], car_id: int) -> dict[str, Any]:
+    lap_samples = max(0, _as_int(raw.get("lap_samples"), 0))
+    lap_total_ms = max(0, _as_int(raw.get("lap_total_ms"), 0))
+    avg_ms = _as_float(raw.get("average_lap_ms"))
+    if avg_ms is None and lap_samples > 0:
+        avg_ms = float(lap_total_ms) / float(lap_samples)
+
+    speed = _as_float(raw.get("speed_kmh"))
+    if speed is None:
+        speed = _as_float(raw.get("last_speed_kmh"))
+
+    return {
+        "car_id": car_id,
+        "driver_name": raw.get("driver_name") if isinstance(raw.get("driver_name"), str) else None,
+        "lap_count": max(0, _as_int(raw.get("lap_count"), 0)),
+        "latest_lap_ms": _as_int(raw.get("latest_lap_ms"), 0) if raw.get("latest_lap_ms") is not None else None,
+        "best_lap_ms": _as_int(raw.get("best_lap_ms"), 0) if raw.get("best_lap_ms") is not None else None,
+        "average_lap_ms": avg_ms,
+        "position": _as_int(raw.get("position"), 0) if raw.get("position") is not None else None,
+        "fuel_percent": _as_float(raw.get("fuel_percent")),
+        "pit_active": bool(raw.get("pit_active", raw.get("in_pit", False))),
+        "speed_kmh": speed,
+    }
+
+
+def _load_active_race_metadata() -> dict[str, Any] | None:
+    try:
+        from src.schemas.race_schema import RaceStatus
+        from src.services import ensure_database_initialized
+        from src.services.race_service import RaceService
+    except Exception:
+        return None
+
+    try:
+        ensure_database_initialized()
+        svc = RaceService()
+        race = svc.get_active_race()
+        if race is None:
+            return None
+        if race.status not in {RaceStatus.RUNNING, RaceStatus.PAUSED}:
+            return None
+
+        elapsed_ms = None
+        if race.started_at is not None:
+            elapsed_ms = max(
+                0,
+                int((utils.now_iso() - race.started_at).total_seconds() * 1000.0),
+            )
+
+        progress = None
+        if race.mode.value == "fixed_duration" and race.duration_seconds and elapsed_ms is not None:
+            duration_ms = race.duration_seconds * 1000
+            if duration_ms > 0:
+                progress = min(100.0, (elapsed_ms / float(duration_ms)) * 100.0)
+
+        safety_car_active = None
+        try:
+            safety_car_active = bool(svc.is_safety_car_active(race.id))
+        except Exception:
+            safety_car_active = None
+
+        return {
+            "race": {
+                "id": race.id,
+                "name": race.name,
+                "status": race.status.value,
+                "mode": race.mode.value,
+                "elapsed_ms": elapsed_ms,
+                "progress_percent": progress,
+                "safety_car_active": safety_car_active,
+                "lap_target": race.lap_target,
+                "duration_seconds": race.duration_seconds,
+            },
+            "drivers": {d.car_id: d.driver_name for d in race.drivers},
+        }
+    except Exception:
+        return None
+
+
+def _resolve_race_snapshot(state: dict[str, Any]) -> dict[str, Any]:
+    raw_metrics = _as_dict(state.get("race_metrics"))
+    snapshot_race = _as_dict(raw_metrics.get("race"))
+    snapshot_diag = _as_dict(raw_metrics.get("diagnostics"))
+    snapshot_cars_raw = _as_list(raw_metrics.get("cars"))
+
+    fallback_cars_raw = _as_list(state.get("cars"))
+    fallback_map: dict[int, dict[str, Any]] = {}
+    for car in fallback_cars_raw:
+        if not isinstance(car, dict):
+            continue
+        car_id = _as_int(car.get("car_id"), 0)
+        if 1 <= car_id <= 6:
+            fallback_map[car_id] = _normalize_car_metric(car, car_id)
+
+    snapshot_map: dict[int, dict[str, Any]] = {}
+    for car in snapshot_cars_raw:
+        if not isinstance(car, dict):
+            continue
+        car_id = _as_int(car.get("car_id"), 0)
+        if 1 <= car_id <= 6:
+            snapshot_map[car_id] = _normalize_car_metric(car, car_id)
+
+    service_meta = _load_active_race_metadata() or {}
+    service_race = _as_dict(service_meta.get("race"))
+    service_drivers = _as_int_keyed_dict(service_meta.get("drivers"))
+
+    ids = set(range(1, 7))
+    ids.update(fallback_map.keys())
+    ids.update(snapshot_map.keys())
+    ids.update(int(k) for k in service_drivers if isinstance(k, int) and 1 <= k <= 6)
+
+    cars: list[dict[str, Any]] = []
+    for car_id in sorted(ids):
+        car = {
+            "car_id": car_id,
+            "driver_name": None,
+            "lap_count": 0,
+            "latest_lap_ms": None,
+            "best_lap_ms": None,
+            "average_lap_ms": None,
+            "position": None,
+            "fuel_percent": None,
+            "pit_active": False,
+            "speed_kmh": None,
+        }
+        if car_id in fallback_map:
+            car.update(fallback_map[car_id])
+        if car_id in service_drivers and isinstance(service_drivers[car_id], str):
+            car["driver_name"] = str(service_drivers[car_id])
+        if car_id in snapshot_map:
+            for key, value in snapshot_map[car_id].items():
+                if value is not None:
+                    car[key] = value
+        cars.append(car)
+
+    def _car_rank_key(car: dict[str, Any]) -> tuple[int, int, int]:
+        best_lap = car.get("best_lap_ms")
+        best_lap_key = int(best_lap) if isinstance(best_lap, (int, float)) else 10**12
+        return (
+            -int(car.get("lap_count", 0) or 0),
+            best_lap_key,
+            int(car.get("car_id", 0) or 0),
+        )
+
+    ranked = sorted(cars, key=_car_rank_key)
+    for idx, car in enumerate(ranked, start=1):
+        car["position"] = idx
+
+    fastest_values: list[int] = []
+    for car in ranked:
+        best_lap = car.get("best_lap_ms")
+        if isinstance(best_lap, (int, float)):
+            fastest_values.append(int(best_lap))
+    leader_lap_count = int(ranked[0].get("lap_count", 0) or 0) if ranked else 0
+    total_laps = int(sum(int(c.get("lap_count", 0) or 0) for c in ranked))
+    leader_car_id = ranked[0]["car_id"] if ranked else None
+
+    race = {
+        "id": None,
+        "name": None,
+        "status": str(state.get("race", "idle")),
+        "mode": None,
+        "elapsed_ms": None,
+        "progress_percent": None,
+        "leader_car_id": leader_car_id,
+        "fastest_lap_ms": min(fastest_values) if fastest_values else None,
+        "total_laps": total_laps,
+        "safety_car_active": None,
+    }
+
+    for key in ("id", "name", "status", "mode", "elapsed_ms", "progress_percent", "safety_car_active"):
+        if key in service_race and service_race[key] is not None:
+            race[key] = service_race[key]
+    for key in (
+        "id",
+        "name",
+        "status",
+        "mode",
+        "elapsed_ms",
+        "progress_percent",
+        "leader_car_id",
+        "fastest_lap_ms",
+        "total_laps",
+        "safety_car_active",
+    ):
+        if key in snapshot_race and snapshot_race[key] is not None:
+            race[key] = snapshot_race[key]
+
+    lap_target = _as_int(service_race.get("lap_target"), 0)
+    if race.get("progress_percent") is None and lap_target > 0:
+        race["progress_percent"] = min(
+            100.0,
+            (float(leader_lap_count) / float(lap_target)) * 100.0,
+        )
+
+    diagnostics = {
+        "last_telemetry_at_iso": snapshot_diag.get("last_telemetry_at_iso"),
+        "last_state_update_at_iso": snapshot_diag.get("last_state_update_at_iso"),
+        "active_race_id": snapshot_diag.get("active_race_id", race.get("id")),
+        "processed_lap_events": _as_int(snapshot_diag.get("processed_lap_events"), 0),
+        "cars_in_snapshot": snapshot_diag.get("cars_in_snapshot", [c["car_id"] for c in ranked]),
+        "last_lap_payload": snapshot_diag.get("last_lap_payload"),
+        "dropped_lap_events": _as_int(snapshot_diag.get("dropped_lap_events"), 0),
+    }
+
+    return {
+        "race": race,
+        "cars": ranked,
+        "diagnostics": diagnostics,
+        "source_priority": {
+            "state_snapshot": bool(raw_metrics),
+            "repository_fallback": bool(service_meta),
+            "in_memory_fallback": True,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -215,54 +486,12 @@ h1, h2, h3, h4 { letter-spacing: 0.02em; }
 # ---------------------------------------------------------------------------
 
 
-def _render_header(state: dict[str, Any]) -> None:
-    conn = state.get("connection") or {}
-    conn_state = str(conn.get("state", "?"))
-    conn_reason = conn.get("reason")
-    desired_connected = bool(conn.get("desired_connected", False))
-    device_name = conn.get("device_name") if isinstance(conn.get("device_name"), str) else None
-    mac_address = conn.get("mac_address") if isinstance(conn.get("mac_address"), str) else None
-    last_seen = conn.get("last_seen_at") if isinstance(conn.get("last_seen_at"), str) else None
-    reconnect_attempts_raw = conn.get("reconnect_attempts")
-    reconnect_attempts = (
-        int(reconnect_attempts_raw)
-        if isinstance(reconnect_attempts_raw, (int, float, str))
-        else 0
-    )
-    race_state = str(state.get("race", "idle"))
-    active_raw = state.get("active_car_count")
-    active_car_count = int(active_raw) if isinstance(active_raw, (int, float, str)) else 0
-    last_err = conn.get("last_error")
-
-    err_html = ""
-    if last_err:
-        err_html = (
-            f'<span class="cm-badge" style="color:#fecaca;border-color:#7f1d1d;">'
-            f"⚠ {last_err}</span>"
-        )
-    reason_html = ""
-    if isinstance(conn_reason, str) and conn_reason:
-        reason_html = (
-            '<span class="cm-badge" style="color:#cbd5e1;border-color:#334155;">'
-            f"REASON · {conn_reason}</span>"
-        )
-
-    stale_html = ""
-    if conn_state == "stale":
-        stale_html = (
-            '<span class="cm-badge" style="color:#fecaca;border-color:#7f1d1d;">'
-            "STALE TELEMETRY</span>"
-        )
-
-    device_html = ""
-    if device_name or mac_address:
-        label = device_name or "unknown"
-        suffix = f" · {mac_address}" if mac_address else ""
-        device_html = f'<span class="cm-badge">DEVICE · {label}{suffix}</span>'
-
-    last_seen_html = ""
-    if last_seen:
-        last_seen_html = f'<span class="cm-badge">LAST SEEN · {last_seen}</span>'
+def _render_header(state: dict[str, Any], race_snapshot: dict[str, Any]) -> None:
+    conn = _as_dict(state.get("connection"))
+    conn_state = str(conn.get("state", "unknown")).lower()
+    race = _as_dict(race_snapshot.get("race"))
+    race_status = str(race.get("status", "idle")).upper()
+    active_car_count = len(race_snapshot.get("cars") or [])
 
     st.html(
         dedent(
@@ -270,21 +499,13 @@ def _render_header(state: dict[str, Any]) -> None:
             <div class="cm-header">
                 <div class="cm-title"><span class="flag">🏁</span>CARRERA · LIVE TIMING</div>
                 <div class="cm-badges">
-                    {err_html}
-                    {reason_html}
-                    {stale_html}
-                    {device_html}
-                    {last_seen_html}
                     <span class="cm-badge">CARS · {active_car_count}</span>
-                    <span class="cm-badge">DESIRED · {str(desired_connected).upper()}</span>
-                    <span class="cm-badge">RETRIES · {reconnect_attempts}</span>
                     <span class="cm-badge">
-                        <span class="dot" style="background:{_race_color(race_state)}"></span>
-                        RACE · {race_state.upper()}
+                        <span class="dot" style="background:{_race_color(str(race.get('status', 'idle')).lower())}"></span>
+                        RACE · {race_status}
                     </span>
-                    <span class="cm-badge">
-                        <span class="dot" style="background:{_connection_color(conn_state)}"></span>
-                        LINK · {conn_state.upper()}
+                    <span class="cm-badge" title="Connection status" style="font-size:18px;padding:4px 10px;">
+                        {_connection_icon(conn_state)}
                     </span>
                 </div>
             </div>
@@ -293,36 +514,71 @@ def _render_header(state: dict[str, Any]) -> None:
     )
 
 
-def _render_leaderboard(state: dict[str, Any]) -> None:
-    cars: list[dict[str, Any]] = list(state.get("cars") or [])
+def _render_race_metrics(race_snapshot: dict[str, Any]) -> None:
+    race = _as_dict(race_snapshot.get("race"))
+    cars: list[dict[str, Any]] = [c for c in _as_list(race_snapshot.get("cars")) if isinstance(c, dict)]
+
+    race_name = race.get("name") if isinstance(race.get("name"), str) else "-"
+    race_status = str(race.get("status") or "idle").upper()
+    race_mode = str(race.get("mode") or "-").upper()
+    elapsed_display = _format_lap_ms(race.get("elapsed_ms"))
+    progress = _as_float(race.get("progress_percent"))
+    progress_display = f"{progress:.1f}%" if progress is not None else "-"
+    leader_display = f"#{race.get('leader_car_id')}" if race.get("leader_car_id") is not None else "-"
+    total_laps = _as_int(race.get("total_laps"), 0)
+    fastest_lap = _format_lap_ms(race.get("fastest_lap_ms"))
+    safety_raw = race.get("safety_car_active")
+    safety_display = "ON" if safety_raw is True else "OFF" if safety_raw is False else "-"
+
+    st.subheader("Race Metrics")
+    top = st.columns(6)
+    top[0].metric("Race", race_name)
+    top[1].metric("Status", race_status)
+    top[2].metric("Mode", race_mode)
+    top[3].metric("Elapsed", elapsed_display)
+    top[4].metric("Progress", progress_display)
+    top[5].metric("Leader", leader_display)
+
+    global_cols = st.columns(3)
+    global_cols[0].metric("Total Laps", str(total_laps))
+    global_cols[1].metric("Fastest Lap", fastest_lap)
+    global_cols[2].metric("Safety Car", safety_display)
+
     if not cars:
-        st.info("Waiting for cars…")
-        return
-
-    def _sort_key(c: dict[str, Any]) -> tuple[int, int]:
-        laps = -int(c.get("lap_count", 0) or 0)
-        best = c.get("best_lap_ms")
-        best_v = int(best) if isinstance(best, (int, float)) else 10**12
-        return (laps, best_v)
-
-    cars.sort(key=_sort_key)
+        cars = [
+            {
+                "car_id": car_id,
+                "driver_name": None,
+                "lap_count": 0,
+                "latest_lap_ms": None,
+                "best_lap_ms": None,
+                "fuel_percent": None,
+                "pit_active": False,
+                "speed_kmh": None,
+                "position": car_id,
+            }
+            for car_id in range(1, 7)
+        ]
 
     leader = cars[0]
     leader_laps = int(leader.get("lap_count", 0) or 0)
     leader_best = leader.get("best_lap_ms")
 
     rows_html: list[str] = []
-    for idx, car in enumerate(cars):
-        pos = idx + 1
+    for car in cars:
+        pos = _as_int(car.get("position"), 0)
+        if pos <= 0:
+            pos = len(rows_html) + 1
         pos_class = {1: "p1", 2: "p2", 3: "p3"}.get(pos, "")
-        car_id = int(car.get("car_id", 0) or 0)
+        car_id = _as_int(car.get("car_id"), 0)
         color = _car_color(car_id)
-        laps = int(car.get("lap_count", 0) or 0)
+        driver = car.get("driver_name") if isinstance(car.get("driver_name"), str) else f"Car {car_id}"
+        laps = _as_int(car.get("lap_count"), 0)
         best_ms = car.get("best_lap_ms")
         latest_ms = car.get("latest_lap_ms")
         fuel_pct = car.get("fuel_percent")
-        speed = car.get("last_speed_kmh")
-        in_pit = bool(car.get("in_pit"))
+        speed = car.get("speed_kmh")
+        in_pit = bool(car.get("pit_active"))
 
         if pos == 1:
             gap_str = "—"
@@ -348,14 +604,14 @@ def _render_leaderboard(state: dict[str, Any]) -> None:
                 "</div>"
             )
         else:
-            fuel_html = '<span class="cm-time dim">—</span>'
+            fuel_html = '<span class="cm-time dim">-</span>'
 
         if isinstance(speed, (int, float)):
             speed_html = (
                 f'<span class="cm-speed">{float(speed):5.1f}<span class="unit"> km/h</span></span>'
             )
         else:
-            speed_html = '<span class="cm-time dim">—</span>'
+            speed_html = '<span class="cm-time dim">-</span>'
 
         rows_html.append(
             dedent(
@@ -365,7 +621,7 @@ def _render_leaderboard(state: dict[str, Any]) -> None:
                     <td>
                         <span class="cm-car">
                             <span class="chip" style="background:{color}">#{car_id}</span>
-                            Car {car_id}{pit_html}
+                            {driver}{pit_html}
                         </span>
                     </td>
                     <td class="cm-laps">{laps}</td>
@@ -391,15 +647,36 @@ def _render_leaderboard(state: dict[str, Any]) -> None:
     st.html(table_html)
 
 
-def _render_recent(state: dict[str, Any]) -> None:
-    with st.expander("Recent events", expanded=False):
-        recent = state.get("recent_events") or []
+def _render_diagnostics(state: dict[str, Any], race_snapshot: dict[str, Any]) -> None:
+    conn = _as_dict(state.get("connection"))
+    diagnostics = _as_dict(race_snapshot.get("diagnostics"))
+    with st.expander("Diagnostics", expanded=False):
+        st.write(
+            {
+                "connection": {
+                    "state": conn.get("state"),
+                    "device_name": conn.get("device_name"),
+                    "mac_address": conn.get("mac_address"),
+                    "last_seen_at": conn.get("last_seen_at"),
+                    "reconnect_attempts": conn.get("reconnect_attempts"),
+                    "last_error": conn.get("last_error"),
+                    "reason": conn.get("reason"),
+                },
+                "race_metrics": diagnostics,
+                "source_priority": race_snapshot.get("source_priority", {}),
+            }
+        )
+
+        recent = _as_list(state.get("recent_events"))
         if not recent:
             st.caption("(no events yet)")
             return
+
         rows: list[dict[str, Any]] = []
         for ev in recent[:50]:
-            payload = ev.get("payload") or {}
+            if not isinstance(ev, dict):
+                continue
+            payload = _as_dict(ev.get("payload"))
             if ev.get("event_type") == "lap" and "lap_time_ms" in payload:
                 payload = {
                     **payload,
@@ -430,9 +707,10 @@ def _render_body(state_file: Path, refresh_ms: int) -> None:
     except OSError:
         pass
 
-    _render_header(state)
-    _render_leaderboard(state)
-    _render_recent(state)
+    race_snapshot = _resolve_race_snapshot(state)
+    _render_header(state, race_snapshot)
+    _render_race_metrics(race_snapshot)
+    _render_diagnostics(state, race_snapshot)
 
     snap_iso = state.get("taken_at_iso")
     if snap_iso:

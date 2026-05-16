@@ -154,3 +154,9 @@ mypy src
 
 The suite covers event schema, supervisor/service lifecycle behavior,
 mock client, storage, state manager, and adapter contracts.
+
+## Dashboard Behavior Notes
+
+- The header connection indicator is icon-only (`🟢`, `🟡`, `🟠`, `🔴`, `⚫`, `⚪`) to keep the live view calm during reconnect churn.
+- The race metrics section is always visible, even without an active race; unavailable values render as placeholders (`-`) instead of hiding the section.
+- Detailed connection and race-metric debug fields are available in the collapsed **Diagnostics** panel, not in the primary leaderboard layout.

@@ -135,6 +135,17 @@ class RaceService:
             )
             return [self._repo.to_read(session, r) for r in races]
 
+    def get_active_race(self) -> RaceRead | None:
+        """Return the newest race in status running/paused, if any."""
+        races = self.list_races(limit=200)
+        active = [
+            race for race in races if race.status in {RaceStatus.RUNNING, RaceStatus.PAUSED}
+        ]
+        if not active:
+            return None
+        active.sort(key=lambda race: race.updated_at, reverse=True)
+        return active[0]
+
     def update_race(self, race_id: int, payload: RaceUpdate) -> RaceRead:
         with SessionLocal() as session:
             race = self._repo.get_race(session, race_id)

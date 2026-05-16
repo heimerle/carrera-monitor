@@ -1,0 +1,129 @@
+{
+  "taken_at_iso": "2026-05-16T12:00:03+00:00",
+  "taken_at_monotonic_ms": 4000,
+  "connection": {
+    "state": "ready",
+    "since_ms": 150,
+    "last_error": null,
+    "event": "bluetooth_ready",
+    "reason": "subscriptions_ready",
+    "timeout_streak": 0,
+    "desired_connected": true,
+    "device_id": "AA:BB:CC:DD:EE:FF",
+    "device_name": "Control_Unit",
+    "mac_address": "AA:BB:CC:DD:EE:FF",
+    "rssi": -55,
+    "connected_at": "2026-05-16T12:00:00+00:00",
+    "disconnected_at": null,
+    "last_seen_at": "2026-05-16T12:00:03+00:00",
+    "last_rx_monotonic_ms": 3900,
+    "reconnect_attempts": 1
+  },
+  "race": "running",
+  "race_metrics": {
+    "race": {
+      "id": 42,
+      "name": "Sprint Heat",
+      "status": "running",
+      "mode": "fixed_laps",
+      "elapsed_ms": 180000,
+      "progress_percent": 60.0,
+      "leader_car_id": 2,
+      "fastest_lap_ms": 5432,
+      "total_laps": 21,
+      "safety_car_active": false
+    },
+    "cars": [
+      {
+        "car_id": 2,
+        "driver_name": "Driver 2",
+        "lap_count": 11,
+        "latest_lap_ms": 5550,
+        "best_lap_ms": 5432,
+        "average_lap_ms": 5610.0,
+        "position": 1,
+        "fuel_percent": 67.2,
+        "pit_active": false,
+        "speed_kmh": 109.8
+      },
+      {
+        "car_id": 1,
+        "driver_name": "Driver 1",
+        "lap_count": 10,
+        "latest_lap_ms": 5700,
+        "best_lap_ms": 5500,
+        "average_lap_ms": 5662.1,
+        "position": 2,
+        "fuel_percent": 61.0,
+        "pit_active": false,
+        "speed_kmh": 103.5
+      }
+    ],
+    "diagnostics": {
+      "last_telemetry_at_iso": "2026-05-16T12:00:03+00:00",
+      "last_state_update_at_iso": "2026-05-16T12:00:03+00:00",
+      "active_race_id": 42,
+      "processed_lap_events": 21,
+      "cars_in_snapshot": [1, 2],
+      "last_lap_payload": {
+        "lap_number": 11,
+        "lap_time_ms": 5550
+      },
+      "dropped_lap_events": 0
+    }
+  },
+  "active_car_ids": [1, 2],
+  "active_car_count": 2,
+  "active_car_window_ms": 3000,
+  "cars": [
+    {
+      "car_id": 2,
+      "lap_count": 11,
+      "lap_samples": 11,
+      "lap_total_ms": 61710,
+      "best_lap_ms": 5432,
+      "latest_lap_ms": 5550,
+      "average_lap_ms": 5610.0,
+      "fuel_percent": 67.2,
+      "in_pit": false,
+      "pit_active": false,
+      "last_speed_kmh": 109.8,
+      "speed_kmh": 109.8,
+      "last_event_at_ms": 3900,
+      "driver_name": "Driver 2",
+      "position": 1
+    },
+    {
+      "car_id": 1,
+      "lap_count": 10,
+      "lap_samples": 10,
+      "lap_total_ms": 56621,
+      "best_lap_ms": 5500,
+      "latest_lap_ms": 5700,
+      "average_lap_ms": 5662.1,
+      "fuel_percent": 61.0,
+      "in_pit": false,
+      "pit_active": false,
+      "last_speed_kmh": 103.5,
+      "speed_kmh": 103.5,
+      "last_event_at_ms": 3850,
+      "driver_name": "Driver 1",
+      "position": 2
+    }
+  ],
+  "recent_events": [
+    {
+      "timestamp_iso": "2026-05-16T12:00:03+00:00",
+      "timestamp_monotonic_ms": 3900,
+      "source": "mock",
+      "event_type": "lap",
+      "car_id": 2,
+      "controller_id": null,
+      "payload": {
+        "lap_number": 11,
+        "lap_time_ms": 5550
+      },
+      "metadata": {}
+    }
+  ]
+}

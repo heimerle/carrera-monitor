@@ -1,0 +1,52 @@
+{
+  "taken_at_iso": "2026-05-16T12:00:00+00:00",
+  "taken_at_monotonic_ms": 1000,
+  "connection": {
+    "state": "disconnected",
+    "since_ms": 100,
+    "last_error": null,
+    "event": null,
+    "reason": null,
+    "timeout_streak": null,
+    "desired_connected": false,
+    "device_id": null,
+    "device_name": null,
+    "mac_address": null,
+    "rssi": null,
+    "connected_at": null,
+    "disconnected_at": null,
+    "last_seen_at": null,
+    "last_rx_monotonic_ms": null,
+    "reconnect_attempts": 0
+  },
+  "race": "idle",
+  "race_metrics": {
+    "race": {
+      "id": null,
+      "name": null,
+      "status": "idle",
+      "mode": null,
+      "elapsed_ms": null,
+      "progress_percent": null,
+      "leader_car_id": null,
+      "fastest_lap_ms": null,
+      "total_laps": 0,
+      "safety_car_active": null
+    },
+    "cars": [],
+    "diagnostics": {
+      "last_telemetry_at_iso": null,
+      "last_state_update_at_iso": "2026-05-16T12:00:00+00:00",
+      "active_race_id": null,
+      "processed_lap_events": 0,
+      "cars_in_snapshot": [],
+      "last_lap_payload": null,
+      "dropped_lap_events": 0
+    }
+  },
+  "active_car_ids": [],
+  "active_car_count": 0,
+  "active_car_window_ms": 3000,
+  "cars": [],
+  "recent_events": []
+}

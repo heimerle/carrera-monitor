@@ -81,6 +81,14 @@ class CarreraAdapter(Protocol):
     async def discovered_devices(self) -> list[DiscoveredDevice]: ...
 
 
+def _coerce_int(value: object | None) -> int:
+    if isinstance(value, bool) or value is None:
+        raise TypeError("invalid int value")
+    if isinstance(value, (int, float, str, bytes, bytearray)):
+        return int(value)
+    raise TypeError("invalid int value")
+
+
 # ---------------------------------------------------------------------------
 # RawFrame → TelemetryEvent translation
 # ---------------------------------------------------------------------------
@@ -109,23 +117,39 @@ def translate_raw_frame(
     primary: TelemetryEvent | None = None
     raw_data_for_primary: dict[str, Any] | None = None
 
-    if kind == "lap":
-        payload: dict[str, Any] = {
-            "lap_number": int(frame["lap_number"]),
-            "lap_time_ms": int(frame["lap_time_ms"]),
-        }
-        if "cu_timestamp_ms" in frame:
-            payload["cu_timestamp_ms"] = int(frame["cu_timestamp_ms"])
-        primary = TelemetryEvent(
-            timestamp_iso=ts_iso,
-            timestamp_monotonic_ms=ts_mono,
-            source=source,
-            event_type=EventType.LAP,
-            car_id=car_id,
-            controller_id=controller_id,
-            payload=payload,
-            metadata=metadata,
-        )
+    if kind in {"lap", "lap_completed"}:
+        try:
+            lap_number_raw = frame.get("lap_number", frame.get("lap"))
+            lap_time_raw = frame.get("lap_time_ms", frame.get("time_ms"))
+            payload: dict[str, Any] = {
+                "lap_number": _coerce_int(lap_number_raw),
+                "lap_time_ms": _coerce_int(lap_time_raw),
+            }
+            if "cu_timestamp_ms" in frame:
+                payload["cu_timestamp_ms"] = _coerce_int(frame["cu_timestamp_ms"])
+            primary = TelemetryEvent(
+                timestamp_iso=ts_iso,
+                timestamp_monotonic_ms=ts_mono,
+                source=source,
+                event_type=EventType.LAP,
+                car_id=car_id,
+                controller_id=controller_id,
+                payload=payload,
+                metadata=metadata,
+            )
+        except (TypeError, ValueError, KeyError):
+            raw_data_for_primary = {"frame": dict(frame)}
+            primary = TelemetryEvent(
+                timestamp_iso=ts_iso,
+                timestamp_monotonic_ms=ts_mono,
+                source=source,
+                event_type=EventType.NOT_SUPPORTED,
+                payload={
+                    "reason": f"invalid lap payload for frame kind: {kind!r}"
+                },
+                raw_data=raw_data_for_primary,
+                metadata=metadata,
+            )
     elif kind == "fuel":
         level = _clamp(float(frame["fuel_percent"]), 0.0, 100.0)
         primary = TelemetryEvent(

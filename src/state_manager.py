@@ -30,12 +30,16 @@ from .telemetry_processor import clamp_fuel, clamp_unit, update_best_lap
 logger = logging.getLogger(__name__)
 
 _RECENT_EVENTS_MAX = 100
+_CANONICAL_MIN_CAR_ID = 1
+_CANONICAL_MAX_CAR_ID = 6
 
 
 @dataclass
 class CarState:
     car_id: int
     lap_count: int = 0
+    lap_samples: int = 0
+    lap_total_ms: int = 0
     best_lap_ms: int | None = None
     latest_lap_ms: int | None = None
     fuel_percent: float | None = None
@@ -71,44 +75,76 @@ class StateManager:
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._last_write_ms: int = 0
+        self._processed_lap_events: int = 0
+        self._dropped_lap_events: int = 0
+        self._last_lap_payload: dict[str, Any] | None = None
+        self._last_telemetry_at_iso: str | None = None
+        self._last_state_update_at_iso: str | None = None
 
     # ----- Public API -----------------------------------------------------
 
     def apply(self, event: TelemetryEvent) -> None:
         """Apply one event to the in-memory state. Safe to call directly from tests."""
+        self._last_telemetry_at_iso = event.timestamp_iso.isoformat()
+        self._last_state_update_at_iso = utils.now_iso().isoformat()
         self._recent.appendleft(event)
+        canonical_car_id = (
+            event.car_id
+            if isinstance(event.car_id, int)
+            and self._is_canonical_car_id(event.car_id)
+            else None
+        )
 
-        if event.car_id is not None and event.event_type in {
+        if canonical_car_id is not None and event.event_type in {
             EventType.LAP,
             EventType.FUEL,
             EventType.PITLANE,
             EventType.SPEED,
             EventType.CONTROLLER_INPUT,
         }:
-            self._active_detector.observe(event.car_id, event.timestamp_monotonic_ms)
+            self._active_detector.observe(canonical_car_id, event.timestamp_monotonic_ms)
 
-        if event.event_type is EventType.LAP and event.car_id is not None:
-            car = self._car(event.car_id)
-            lap_number = int(event.payload["lap_number"])
-            lap_time_ms = int(event.payload["lap_time_ms"])
+        if event.event_type is EventType.LAP:
+            self._processed_lap_events += 1
+            self._last_lap_payload = dict(event.payload)
+            if canonical_car_id is None:
+                self._dropped_lap_events += 1
+                return
+            lap_number_raw = event.payload.get("lap_number")
+            lap_time_ms_raw = event.payload.get("lap_time_ms")
+            if lap_number_raw is None or lap_time_ms_raw is None:
+                self._dropped_lap_events += 1
+                return
+            try:
+                lap_number = int(lap_number_raw)
+                lap_time_ms = int(lap_time_ms_raw)
+            except (TypeError, ValueError):
+                self._dropped_lap_events += 1
+                return
+            if lap_number < 1 or lap_time_ms < 0:
+                self._dropped_lap_events += 1
+                return
+            car = self._car(canonical_car_id)
             car.lap_count = max(car.lap_count, lap_number)
             car.latest_lap_ms = lap_time_ms
             car.best_lap_ms = update_best_lap(car.best_lap_ms, lap_time_ms)
+            car.lap_samples += 1
+            car.lap_total_ms += lap_time_ms
             car.last_event_at_ms = event.timestamp_monotonic_ms
-        elif event.event_type is EventType.FUEL and event.car_id is not None:
-            car = self._car(event.car_id)
+        elif event.event_type is EventType.FUEL and canonical_car_id is not None:
+            car = self._car(canonical_car_id)
             car.fuel_percent = clamp_fuel(float(event.payload["level_percent"]))
             car.last_event_at_ms = event.timestamp_monotonic_ms
-        elif event.event_type is EventType.PITLANE and event.car_id is not None:
-            car = self._car(event.car_id)
+        elif event.event_type is EventType.PITLANE and canonical_car_id is not None:
+            car = self._car(canonical_car_id)
             car.in_pit = bool(event.payload["in_pit"])
             car.last_event_at_ms = event.timestamp_monotonic_ms
-        elif event.event_type is EventType.SPEED and event.car_id is not None:
-            car = self._car(event.car_id)
+        elif event.event_type is EventType.SPEED and canonical_car_id is not None:
+            car = self._car(canonical_car_id)
             car.last_speed_kmh = max(0.0, float(event.payload["speed_kmh"]))
             car.last_event_at_ms = event.timestamp_monotonic_ms
-        elif event.event_type is EventType.CONTROLLER_INPUT and event.car_id is not None:
-            car = self._car(event.car_id)
+        elif event.event_type is EventType.CONTROLLER_INPUT and canonical_car_id is not None:
+            car = self._car(canonical_car_id)
             # Sanitize via clamp helpers (no field stored, but invariant doc).
             _ = clamp_unit(float(event.payload["throttle"]))
             _ = clamp_unit(float(event.payload["brake"]))
@@ -189,6 +225,8 @@ class StateManager:
     def snapshot(self) -> dict[str, Any]:
         """JSON-serializable dict written to `state.json`."""
         active = self._active_detector.snapshot(self._mono())
+        cars = [self._car_to_dict(c) for c in sorted(self._cars.values(), key=lambda c: c.car_id)]
+        race_metrics = self._build_race_metrics(cars)
         return {
             "taken_at_iso": utils.now_iso().isoformat(),
             "taken_at_monotonic_ms": self._mono(),
@@ -211,10 +249,11 @@ class StateManager:
                 "reconnect_attempts": self._connection.reconnect_attempts,
             },
             "race": self._race_state.value,
+            "race_metrics": race_metrics,
             "active_car_ids": active["active_car_ids"],
             "active_car_count": active["active_car_count"],
             "active_car_window_ms": active["window_ms"],
-            "cars": [asdict(c) for c in sorted(self._cars.values(), key=lambda c: c.car_id)],
+            "cars": cars,
             "recent_events": [
                 self._event_to_dict(ev) for ev in list(self._recent)[:_RECENT_EVENTS_MAX]
             ],
@@ -249,6 +288,72 @@ class StateManager:
         if car_id not in self._cars:
             self._cars[car_id] = CarState(car_id=car_id)
         return self._cars[car_id]
+
+    @staticmethod
+    def _is_canonical_car_id(car_id: int) -> bool:
+        return _CANONICAL_MIN_CAR_ID <= car_id <= _CANONICAL_MAX_CAR_ID
+
+    @staticmethod
+    def _car_to_dict(car: CarState) -> dict[str, Any]:
+        average_lap_ms: float | None = None
+        if car.lap_samples > 0:
+            average_lap_ms = float(car.lap_total_ms) / float(car.lap_samples)
+        out = asdict(car)
+        out["average_lap_ms"] = average_lap_ms
+        out["pit_active"] = bool(car.in_pit)
+        out["speed_kmh"] = car.last_speed_kmh
+        out["driver_name"] = None
+        out["position"] = None
+        return out
+
+    def _build_race_metrics(self, cars: list[dict[str, Any]]) -> dict[str, Any]:
+        def _car_sort_key(car: dict[str, Any]) -> tuple[int, int, int]:
+            best_lap = car.get("best_lap_ms")
+            best_lap_key = int(best_lap) if isinstance(best_lap, (int, float)) else 10**12
+            return (
+                -int(car.get("lap_count", 0) or 0),
+                best_lap_key,
+                int(car.get("car_id", 0) or 0),
+            )
+
+        ranked = sorted(
+            cars,
+            key=_car_sort_key,
+        )
+        for idx, car in enumerate(ranked, start=1):
+            car["position"] = idx
+
+        best_values: list[int] = []
+        for car in ranked:
+            best_lap = car.get("best_lap_ms")
+            if isinstance(best_lap, (int, float)):
+                best_values.append(int(best_lap))
+        leader_car_id = ranked[0]["car_id"] if ranked else None
+
+        return {
+            "race": {
+                "id": None,
+                "name": None,
+                "status": self._race_state.value,
+                "mode": None,
+                "elapsed_ms": None,
+                "progress_percent": None,
+                "leader_car_id": leader_car_id,
+                "fastest_lap_ms": min(best_values) if best_values else None,
+                "total_laps": int(sum(int(c.get("lap_count", 0) or 0) for c in ranked)),
+                "safety_car_active": None,
+            },
+            "cars": ranked,
+            "diagnostics": {
+                "last_telemetry_at_iso": self._last_telemetry_at_iso,
+                "last_state_update_at_iso": self._last_state_update_at_iso,
+                "active_race_id": None,
+                "processed_lap_events": self._processed_lap_events,
+                "cars_in_snapshot": [int(c["car_id"]) for c in ranked],
+                "last_lap_payload": self._last_lap_payload,
+                "dropped_lap_events": self._dropped_lap_events,
+            },
+        }
 
     @staticmethod
     def _event_to_dict(ev: TelemetryEvent) -> dict[str, Any]:

@@ -47,6 +47,7 @@ class TestPayloadShapes:
         [
             (EventType.LAP, {"lap_number": 1, "lap_time_ms": 8000}),
             (EventType.LAP, {"lap_number": 1, "lap_time_ms": 8000, "cu_timestamp_ms": 12345}),
+            (EventType.LAP, {"lap": 1, "time_ms": 8000}),
             (EventType.RACE_STATE, {"state": "running"}),
             (EventType.FUEL, {"level_percent": 75.5}),
             (EventType.CONTROLLER_INPUT, {"throttle": 0.4, "brake": 0.0}),
@@ -142,6 +143,18 @@ class TestPayloadShapes:
                     },
                 )
             )
+
+    def test_lap_alias_payload_normalizes_to_canonical_keys(self):
+        ev = TelemetryEvent(
+            **_base(
+                event_type=EventType.LAP,
+                payload={"lap": 3, "time_ms": 7123},
+            )
+        )
+        assert ev.payload["lap_number"] == 3
+        assert ev.payload["lap_time_ms"] == 7123
+        assert "lap" not in ev.payload
+        assert "time_ms" not in ev.payload
 
 
 class TestCarIdRange:

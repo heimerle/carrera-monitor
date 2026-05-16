@@ -52,7 +52,13 @@ class ConnectionState(StrEnum):
 # Allowed payload keys per EventType. Unknown keys are rejected to catch typos
 # early (data-model §1 validation rules).
 _ALLOWED_PAYLOAD_KEYS: dict[EventType, set[str]] = {
-    EventType.LAP: {"lap_number", "lap_time_ms", "cu_timestamp_ms"},
+    EventType.LAP: {
+        "lap_number",
+        "lap_time_ms",
+        "lap",
+        "time_ms",
+        "cu_timestamp_ms",
+    },
     EventType.RACE_STATE: {"state"},
     EventType.FUEL: {"level_percent"},
     EventType.CONTROLLER_INPUT: {"throttle", "brake"},
@@ -143,12 +149,24 @@ class TelemetryEvent(BaseModel):
         # Per-type required-field + value checks.
         p = self.payload
         if self.event_type is EventType.LAP:
+            if "lap_number" not in p and "lap" in p:
+                try:
+                    p["lap_number"] = int(p["lap"])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("lap must be coercible to int") from exc
+            if "lap_time_ms" not in p and "time_ms" in p:
+                try:
+                    p["lap_time_ms"] = int(p["time_ms"])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("time_ms must be coercible to int") from exc
             _require(p, "lap_number", int)
             _require(p, "lap_time_ms", int)
             if p["lap_number"] < 1:
                 raise ValueError("lap_number must be ≥ 1")
             if p["lap_time_ms"] < 0:
                 raise ValueError("lap_time_ms must be ≥ 0")
+            p.pop("lap", None)
+            p.pop("time_ms", None)
             if "cu_timestamp_ms" in p:
                 if not isinstance(p["cu_timestamp_ms"], int):
                     raise ValueError("cu_timestamp_ms must be an int")

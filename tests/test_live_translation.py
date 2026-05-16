@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.carrera_client import LiveCarreraAdapter
+from src.carrera_client import LiveCarreraAdapter, translate_raw_frame
+from src.event_model import EventType
 
 
 @dataclass
@@ -116,6 +117,40 @@ def test_timer_slot_normalization_drops_non_canonical_slots() -> None:
 
 
 # --------------------------------------------------------- Status → diffs
+
+
+def test_translate_lap_completed_normalizes_to_canonical_lap_event() -> None:
+    events = translate_raw_frame(
+        {
+            "kind": "lap_completed",
+            "car_id": 2,
+            "lap": 4,
+            "time_ms": 5432,
+        },
+        "mock",
+    )
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.event_type is EventType.LAP
+    assert ev.payload["lap_number"] == 4
+    assert ev.payload["lap_time_ms"] == 5432
+    assert "lap" not in ev.payload
+    assert "time_ms" not in ev.payload
+
+
+def test_translate_lap_completed_invalid_payload_becomes_not_supported() -> None:
+    events = translate_raw_frame(
+        {
+            "kind": "lap_completed",
+            "car_id": 2,
+            "lap": "oops",
+        },
+        "mock",
+    )
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.event_type is EventType.NOT_SUPPORTED
+    assert "invalid lap payload" in ev.payload["reason"]
 
 
 def test_status_first_frame_emits_full_state() -> None:

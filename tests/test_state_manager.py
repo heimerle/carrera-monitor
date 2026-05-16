@@ -225,3 +225,76 @@ def test_connection_status_visibility_within_one_second(tmp_path: Path):
     assert snap["connection"]["since_ms"] == event_ts
     latency_ms = int(snap["taken_at_monotonic_ms"]) - int(event_ts)
     assert latency_ms <= 1000
+
+
+def test_race_metrics_snapshot_exists_for_inactive_race(tmp_path: Path):
+    mgr = _make_mgr(tmp_path)
+
+    snap = mgr.snapshot()
+    race_metrics = snap["race_metrics"]
+
+    assert race_metrics["race"]["status"] == "idle"
+    assert race_metrics["race"]["total_laps"] == 0
+    assert race_metrics["race"]["leader_car_id"] is None
+    assert race_metrics["diagnostics"]["processed_lap_events"] == 0
+    assert race_metrics["diagnostics"]["dropped_lap_events"] == 0
+
+
+def test_race_metrics_snapshot_updates_for_active_race(tmp_path: Path):
+    mgr = _make_mgr(tmp_path)
+    mgr.apply(_ev(EventType.RACE_STATE, payload={"state": "running"}, ts_ms=100))
+    mgr.apply(_ev(EventType.LAP, car_id=2, payload={"lap_number": 1, "lap_time_ms": 5600}, ts_ms=200))
+    mgr.apply(_ev(EventType.LAP, car_id=2, payload={"lap_number": 2, "lap_time_ms": 5500}, ts_ms=300))
+    mgr.apply(_ev(EventType.LAP, car_id=1, payload={"lap_number": 1, "lap_time_ms": 5800}, ts_ms=350))
+
+    snap = mgr.snapshot()
+    race_metrics = snap["race_metrics"]
+
+    assert race_metrics["race"]["status"] == "running"
+    assert race_metrics["race"]["leader_car_id"] == 2
+    assert race_metrics["race"]["fastest_lap_ms"] == 5500
+    assert race_metrics["race"]["total_laps"] == 3
+
+    car2 = next(c for c in race_metrics["cars"] if c["car_id"] == 2)
+    assert car2["lap_count"] == 2
+    assert car2["latest_lap_ms"] == 5500
+    assert car2["best_lap_ms"] == 5500
+    assert car2["average_lap_ms"] == 5550.0
+    assert car2["position"] == 1
+
+
+def test_lap_events_with_unknown_car_or_missing_time_are_dropped_safely(tmp_path: Path):
+    mgr = _make_mgr(tmp_path)
+
+    # Unknown canonical car slot (outside 1..6) should be ignored safely.
+    mgr.apply(
+        _ev(
+            EventType.LAP,
+            car_id=7,
+            payload={"lap_number": 1, "lap_time_ms": 6000},
+            ts_ms=100,
+        )
+    )
+
+    # Construct a malformed LAP event bypassing validators to emulate noisy input.
+    malformed = TelemetryEvent.model_construct(
+        timestamp_iso=datetime.now(tz=UTC),
+        timestamp_monotonic_ms=200,
+        source="mock",
+        event_type=EventType.LAP,
+        car_id=1,
+        controller_id=None,
+        payload={"lap_number": 1},
+        raw_data=None,
+        metadata={},
+    )
+    mgr.apply(malformed)
+
+    snap = mgr.snapshot()
+    ids = [c["car_id"] for c in snap["cars"]]
+    assert 7 not in ids
+    assert 1 not in ids
+
+    diagnostics = snap["race_metrics"]["diagnostics"]
+    assert diagnostics["processed_lap_events"] == 2
+    assert diagnostics["dropped_lap_events"] == 2

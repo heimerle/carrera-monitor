@@ -68,6 +68,54 @@ def event_factory():
     return _make
 
 
+@pytest.fixture
+def raw_lap_frame_factory():
+    """Build canonical lap raw frames for translation tests."""
+
+    def _make(
+        *,
+        car_id: int = 1,
+        lap_number: int = 1,
+        lap_time_ms: int = 8000,
+        cu_timestamp_ms: int | None = None,
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "kind": "lap",
+            "car_id": car_id,
+            "lap_number": lap_number,
+            "lap_time_ms": lap_time_ms,
+        }
+        if cu_timestamp_ms is not None:
+            out["cu_timestamp_ms"] = cu_timestamp_ms
+        return out
+
+    return _make
+
+
+@pytest.fixture
+def raw_lap_completed_frame_factory():
+    """Build lap_completed alias raw frames for compatibility tests."""
+
+    def _make(
+        *,
+        car_id: int = 1,
+        lap: int = 1,
+        time_ms: int = 8000,
+        cu_timestamp_ms: int | None = None,
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "kind": "lap_completed",
+            "car_id": car_id,
+            "lap": lap,
+            "time_ms": time_ms,
+        }
+        if cu_timestamp_ms is not None:
+            out["cu_timestamp_ms"] = cu_timestamp_ms
+        return out
+
+    return _make
+
+
 def _default_payload(event_type: EventType) -> dict[str, Any]:
     match event_type:
         case EventType.LAP:
