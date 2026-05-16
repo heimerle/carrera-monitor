@@ -55,8 +55,8 @@ description: "Task list for the Race Controls feature (Finish button, Safety Car
 
 - [X] T010 [P] [US1] In [tests/test_race_controls.py](../../tests/test_race_controls.py) add `test_finish_race_by_user_from_running` — start race → call `svc.finish_race_by_user(race.id)` → assert returned DTO is `RaceRead`, `status='finished'`, `finished_at` populated, event payload contains `triggered_by='user'`, `race_summary` report row created.
 - [X] T011 [P] [US1] Add `test_finish_race_by_user_from_paused` — pause then `finish_race_by_user` succeeds.
-- [X] T012 [P] [US1] Add `test_finish_race_by_user_rejects_invalid_status` parametrized over `{draft, ready, finished, cancelled}` — asserts `InvalidRaceStateError` with the current status name in the message and zero new DB rows.
-- [X] T013 [P] [US1] Add `test_finish_race_by_user_clears_active_context` — asserts `ActiveRaceContext.get()` returns `None` after the call.
+- [X] T012 [P] [US1] Add `test_finish_race_by_user_rejects_invalid_statuses` parametrized over `{draft, ready, finished, cancelled}` — asserts `InvalidRaceStateError` with the current status name in the message and zero new DB rows.
+- [X] T013 [P] [US1] Add `test_finish_race_by_user_persists_triggered_by_marker` and `test_finish_race_by_user_creates_summary_report` — assert the `race_finished` event payload contains `triggered_by='user'` and that exactly one `race_summary` row is written by `finish_race_by_user`.
 
 ### Implementation for User Story 1
 
@@ -77,18 +77,18 @@ description: "Task list for the Race Controls feature (Finish button, Safety Car
 
 ### Tests for User Story 2
 
-- [X] T020 [P] [US2] In [tests/test_race_controls.py](../../tests/test_race_controls.py) add `test_set_safety_car_on_running_persists_event` — assert event row count delta == 1, event_type == `safety_car_started`, payload == `{"active": "true"}`, `is_safety_car_active(...) is True`.
-- [X] T021 [P] [US2] Add `test_set_safety_car_on_paused_succeeds`.
-- [X] T022 [P] [US2] Add `test_set_safety_car_is_idempotent` — re-asserting ON writes zero additional rows.
-- [X] T023 [P] [US2] Add `test_set_safety_car_end_persists_event_in_order` — start then end → exactly two rows, `safety_car_started` strictly before `safety_car_ended` by `created_at`.
-- [X] T024 [P] [US2] Add `test_set_safety_car_rejects_invalid_status` parametrized over `{draft, ready, finished, cancelled}`.
+- [X] T020 [P] [US2] In [tests/test_race_controls.py](../../tests/test_race_controls.py) add `test_set_safety_car_on_running_race` — assert event row count delta == 1, event_type == `safety_car_started`, payload == `{"active": "true"}`, `is_safety_car_active(...) is True`.
+- [X] T021 [P] [US2] Add `test_set_safety_car_on_paused_race`.
+- [X] T022 [P] [US2] Add `test_set_safety_car_idempotent` — re-asserting ON writes zero additional rows.
+- [X] T023 [P] [US2] Add `test_set_safety_car_persists_events` — start then end → exactly two rows, `safety_car_started` strictly before `safety_car_ended` by `created_at`.
+- [X] T024 [P] [US2] Add `test_set_safety_car_rejects_invalid_statuses` parametrized over `{draft, ready, finished, cancelled}`.
 - [X] T025 [P] [US2] Add `test_safety_car_cleared_on_finish` — flag is `False` after `finish_race_by_user`.
 - [X] T026 [P] [US2] Add `test_safety_car_cleared_on_cancel` — flag is `False` after `cancel_race`.
 
 ### Implementation for User Story 2
 
 - [X] T027 [US2] Add `RaceService.set_safety_car(race_id: int, active: bool) -> bool` in [src/services/race_service.py](../../src/services/race_service.py): re-loads race, guards `status ∈ {running, paused}`, short-circuits if cache value matches `active` (idempotent), otherwise inserts a `safety_car_started` or `safety_car_ended` `RaceEvent` row with `payload_json={"active": str(active).lower()}`, updates the cache, returns the new state.
-- [X] T028 [US2] Add `RaceService.is_safety_car_active(race_id: int) -> bool` reading `self._safety_car_active.get(race_id, False)`.
+- [X] T028 [US2] Add `RaceService.is_safety_car_active(race_id: int) -> bool` reading `self._safety_car_active`; on cache miss, reconcile lazily from the latest `safety_car_started` / `safety_car_ended` event row via `RaceRepository.latest_event_type(...)` so the flag survives a process restart (FR-228 / spec §SafetyCarFlag polish).
 - [X] T029 [US2] In `RaceService.finish_race(...)` and `RaceService.cancel_race(...)`, `self._safety_car_active.pop(race_id, None)` to clear the flag on lifecycle exit.
 - [X] T030 [US2] In [src/pages/race_management.py](../../src/pages/race_management.py) inside `_render_race_controls(...)` add a two-column button row: column 1 holds the Finish button from T016; column 2 holds a toggle button (key `safety_car_{race.id}`) labeled **🟡 Safety Car** when inactive and **🟢 End Safety Car** when active. The handler calls `svc.set_safety_car(race.id, not sc_active)` with the same error-surface as T016.
 - [X] T031 [US2] Above the standings table in `_render_running_view`, render a yellow `st.warning(...)` banner whenever `svc.is_safety_car_active(race.id)` returns `True`.
@@ -124,7 +124,7 @@ description: "Task list for the Race Controls feature (Finish button, Safety Car
 - [X] T050 [P] Run `.venv/bin/ruff check .` — clean.
 - [X] T051 [P] Run `.venv/bin/mypy src/` (strict) — `Success: no issues found in 30 source files`.
 - [X] T052 [P] Run `.venv/bin/pytest -q` — 137 passed.
-- [X] T053 Commit on branch `feat/race-controls`, push, open PR #5, watch CI, squash-merge with `--delete-branch`.
+- [X] T053 Commit on branch `002-race-controls`, push, open PR #6 (retroactive spec/plan/tasks), watch CI, squash-merge with `--delete-branch`.
 
 ---
 
