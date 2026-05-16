@@ -22,6 +22,7 @@ class BluetoothConfig(BaseModel):
     mac_address: str | None = None
     scan_timeout_seconds: int = Field(default=10, ge=1)
     reconnect_interval_seconds: int = Field(default=5, ge=1)
+    idle_timeout_seconds: int = Field(default=15, ge=3)
 
 
 class LoggingConfig(BaseModel):
