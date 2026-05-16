@@ -94,6 +94,10 @@ class RaceService:
     ) -> None:
         self._cfg = config or RaceManagementConfig()
         self._repo = repository or RaceRepository()
+        # In-memory safety-car flag per race id. Authoritative state is the
+        # `safety_car_started` / `safety_car_ended` rows in `race_events`; the
+        # dict is a fast cache populated lazily on first read.
+        self._safety_car_active: dict[int, bool] = {}
 
     # -------------------------------------------------------------- CRUD
 
@@ -189,15 +193,36 @@ class RaceService:
             ActiveRaceContext.set(race_id)
             return result
 
-    def finish_race(self, race_id: int) -> RaceRead:
+    def finish_race(self, race_id: int, *, triggered_by: str = "auto") -> RaceRead:
         with ActiveRaceContext.lock():
             result = self._transition(
-                race_id, "finish_race", "finished", set_finished_at=True
+                race_id,
+                "finish_race",
+                "finished",
+                set_finished_at=True,
+                extra_payload={"triggered_by": triggered_by},
             )
             if ActiveRaceContext.get() == race_id:
                 ActiveRaceContext.clear()
+            self._safety_car_active.pop(race_id, None)
             self._auto_snapshot(race_id, force=True)
             return result
+
+    def finish_race_by_user(self, race_id: int) -> RaceRead:
+        """Explicit user-triggered finish (Finish Race button — FR new-1).
+
+        Thin wrapper over :meth:`finish_race` that tags the persisted
+        ``race_finished`` event with ``triggered_by='user'`` and generates the
+        final race summary report. Validation is inherited from the state
+        machine: only ``running`` or ``paused`` races may be finished;
+        anything else raises :class:`InvalidRaceStateError` with a message
+        naming the current status.
+
+        Returns the updated :class:`RaceRead` DTO (UI stays ORM-free per
+        FR-130; the requirement spec writes ``-> Race`` for brevity but the
+        actual return type is the read schema).
+        """
+        return self.finish_race(race_id, triggered_by="user")
 
     def cancel_race(self, race_id: int) -> RaceRead:
         with ActiveRaceContext.lock():
@@ -207,6 +232,7 @@ class RaceService:
             )
             if ActiveRaceContext.get() == race_id:
                 ActiveRaceContext.clear()
+            self._safety_car_active.pop(race_id, None)
             if had_laps:
                 self._auto_snapshot(race_id, force=True)
             return result
@@ -219,6 +245,7 @@ class RaceService:
         *,
         set_started_at: bool = False,
         set_finished_at: bool = False,
+        extra_payload: dict[str, str] | None = None,
     ) -> RaceRead:
         with SessionLocal() as session:
             race = self._repo.get_race(session, race_id)
@@ -233,6 +260,8 @@ class RaceService:
             self._repo.set_status(session, race, new_status)
             if self._cfg.persist_all_events and method != "mark_ready":
                 evt_type, payload = _race_event_payload(method)
+                if extra_payload:
+                    payload = {**payload, **extra_payload}
                 try:
                     self._repo.add_event(
                         session,
@@ -247,6 +276,55 @@ class RaceService:
             session.commit()
             session.refresh(race)
             return self._repo.to_read(session, race)
+
+    # ------------------------------------------------------- Safety car
+
+    def set_safety_car(self, race_id: int, active: bool) -> bool:
+        """Toggle the safety-car phase for an active race.
+
+        Persists a ``safety_car_started`` or ``safety_car_ended`` row in
+        ``race_events`` (idempotent: re-asserting the current value is a
+        no-op). Only valid when the race status is ``running`` or
+        ``paused``; otherwise raises :class:`InvalidRaceStateError`.
+        Returns the resulting safety-car state.
+        """
+        with SessionLocal() as session:
+            race = self._repo.get_race(session, race_id)
+            if race is None:
+                raise RaceNotFoundError(f"race id={race_id} not found")
+            if race.status not in {"running", "paused"}:
+                raise InvalidRaceStateError(
+                    f"safety car can only be toggled while the race is running "
+                    f"or paused (current status={race.status!r})"
+                )
+            current = self._safety_car_active.get(race_id, False)
+            if current == active:
+                return current
+            now = utcnow_naive()
+            evt_type = "safety_car_started" if active else "safety_car_ended"
+            try:
+                self._repo.add_event(
+                    session,
+                    race_id=race.id,
+                    timestamp_iso=now,
+                    event_type=evt_type,
+                    car_id=None,
+                    payload={"active": "true" if active else "false"},
+                )
+                session.commit()
+            except SQLAlchemyError:
+                logger.exception(
+                    "race_service: failed to persist safety-car event for race id=%d",
+                    race_id,
+                )
+                session.rollback()
+                raise
+            self._safety_car_active[race_id] = active
+            return active
+
+    def is_safety_car_active(self, race_id: int) -> bool:
+        """Return True if the safety-car phase is currently active."""
+        return self._safety_car_active.get(race_id, False)
 
     # -------------------------------------------------------- Ingest API
 

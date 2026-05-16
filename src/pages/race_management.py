@@ -18,6 +18,7 @@ from src.schemas.race_schema import (
     DurationUnit,
     RaceCreate,
     RaceMode,
+    RaceRead,
     RaceStatus,
 )
 from src.services import (
@@ -182,6 +183,60 @@ def _safe(callable_: Callable[[], object]) -> None:
         st.error(str(exc))
 
 
+def _render_race_controls(race: RaceRead) -> None:
+    """Prominent race-control bar shown above the active race standings.
+
+    - "Finish Race" calls :meth:`RaceService.finish_race_by_user` (visible only
+      for ``running`` / ``paused`` races, per the new requirement).
+    - "Safety Car ON/OFF" toggles a safety-car phase via
+      :meth:`RaceService.set_safety_car`.
+    """
+    svc = _get_service()
+    sc_active = svc.is_safety_car_active(race.id)
+    if sc_active:
+        st.warning("🟡 Safety car phase is currently ACTIVE.", icon="🟡")
+    cols = st.columns([1, 1, 4])
+    finish_clicked = cols[0].button(
+        "🏁 Finish Race",
+        key=f"finish_race_user_{race.id}",
+        type="primary",
+        help="Mark this race as finished, save the final report, and stop "
+        "assigning new laps to it.",
+    )
+    sc_label = "🟢 End Safety Car" if sc_active else "🟡 Safety Car"
+    sc_clicked = cols[1].button(
+        sc_label,
+        key=f"safety_car_{race.id}",
+        help="Toggle a safety-car phase. Persists a race_events row and "
+        "broadcasts the state to the dashboard.",
+    )
+    if finish_clicked:
+        try:
+            svc.finish_race_by_user(race.id)
+            st.success(f"Race id={race.id} finished.")
+            st.rerun()
+        except (
+            RaceNotFoundError,
+            InvalidRaceStateError,
+            RaceValidationError,
+        ) as exc:
+            st.error(str(exc))
+    if sc_clicked:
+        try:
+            new_state = svc.set_safety_car(race.id, not sc_active)
+            st.toast(
+                f"Safety car {'ON' if new_state else 'OFF'} for race id={race.id}",
+                icon="🟡" if new_state else "🟢",
+            )
+            st.rerun()
+        except (
+            RaceNotFoundError,
+            InvalidRaceStateError,
+            RaceValidationError,
+        ) as exc:
+            st.error(str(exc))
+
+
 def _render_running_view() -> None:
     """FR-129 — live race view for status ∈ {running, paused}."""
     races = _get_service().list_races(limit=50)
@@ -193,6 +248,9 @@ def _render_running_view() -> None:
     label = st.selectbox("Select race", options=list(options.keys()))
     race = options[label]
     st.markdown(f"**{race.name}** — {_status_badge(race.status)} · mode `{race.mode.value}`")
+
+    _render_race_controls(race)
+
     reporting = _get_reporting()
     if race.mode is RaceMode.FIXED_LAPS and race.lap_target:
         standings = reporting.final_standings(race.id)

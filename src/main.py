@@ -30,6 +30,7 @@ from .event_bus import EventBus
 from .mock_client import MockCarreraAdapter
 from .race_runner import RaceTelemetryRunner
 from .services.race_service import RaceService
+from .services.runtime_settings import get_mock_mode
 from .state_manager import StateManager
 from .storage import JsonlEventWriter
 
@@ -125,13 +126,29 @@ async def run(args: argparse.Namespace) -> int:
         csv_laps_enabled=cfg.logging.csv_laps_enabled,
     )
 
-    # Adapter selection.
-    if args.mock:
+    # Adapter selection. ``--mock`` on the CLI wins; otherwise the persistent
+    # UI toggle (data/runtime_settings.json → mock_mode) is honoured so users
+    # can flip simulator on/off from the Streamlit Settings page without
+    # editing the launch command. A live ``--mac`` override always implies
+    # live mode.
+    use_mock = bool(args.mock)
+    if not use_mock and args.mac is None:
+        try:
+            use_mock = get_mock_mode()
+        except OSError:
+            logger.warning("main: failed to read runtime_settings, assuming live mode")
+            use_mock = False
+    if use_mock:
         adapter = MockCarreraAdapter(
             car_count=cfg.cars.count,
             debug_raw=cfg.logging.debug_raw_enabled,
         )
         await adapter.connect(None)
+        logger.info(
+            "main: mock adapter selected (cli=%s, settings=%s)",
+            bool(args.mock),
+            (not args.mock) and (args.mac is None),
+        )
     else:
         # Lazy import so mock mode never touches carreralib code paths.
         from .carrera_client import CarreraClientRunner
