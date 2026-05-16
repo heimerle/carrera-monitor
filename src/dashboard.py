@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
 import streamlit as st
@@ -221,22 +222,24 @@ def _render_header(state: dict[str, Any]) -> None:
         )
 
     st.markdown(
-        f"""
-        <div class="cm-header">
-            <div class="cm-title"><span class="flag">🏁</span>CARRERA · LIVE TIMING</div>
-            <div class="cm-badges">
-                {err_html}
-                <span class="cm-badge">
-                    <span class="dot" style="background:{_race_color(race_state)}"></span>
-                    RACE · {race_state.upper()}
-                </span>
-                <span class="cm-badge">
-                    <span class="dot" style="background:{_connection_color(conn_state)}"></span>
-                    LINK · {conn_state.upper()}
-                </span>
+        dedent(
+            f"""\
+            <div class="cm-header">
+                <div class="cm-title"><span class="flag">🏁</span>CARRERA · LIVE TIMING</div>
+                <div class="cm-badges">
+                    {err_html}
+                    <span class="cm-badge">
+                        <span class="dot" style="background:{_race_color(race_state)}"></span>
+                        RACE · {race_state.upper()}
+                    </span>
+                    <span class="cm-badge">
+                        <span class="dot" style="background:{_connection_color(conn_state)}"></span>
+                        LINK · {conn_state.upper()}
+                    </span>
+                </div>
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -306,23 +309,25 @@ def _render_leaderboard(state: dict[str, Any]) -> None:
             speed_html = '<span class="cm-time dim">—</span>'
 
         rows_html.append(
-            f"""
-            <tr>
-                <td class="cm-pos {pos_class}">P{pos}</td>
-                <td>
-                    <span class="cm-car">
-                        <span class="chip" style="background:{color}">#{car_id}</span>
-                        Car {car_id}{pit_html}
-                    </span>
-                </td>
-                <td class="cm-laps">{laps}</td>
-                <td class="cm-time best">{_format_lap_ms(best_ms)}</td>
-                <td class="cm-time">{_format_lap_ms(latest_ms)}</td>
-                <td class="cm-gap">{gap_str}</td>
-                <td>{fuel_html}</td>
-                <td>{speed_html}</td>
-            </tr>
-            """
+            dedent(
+                f"""\
+                <tr>
+                    <td class="cm-pos {pos_class}">P{pos}</td>
+                    <td>
+                        <span class="cm-car">
+                            <span class="chip" style="background:{color}">#{car_id}</span>
+                            Car {car_id}{pit_html}
+                        </span>
+                    </td>
+                    <td class="cm-laps">{laps}</td>
+                    <td class="cm-time best">{_format_lap_ms(best_ms)}</td>
+                    <td class="cm-time">{_format_lap_ms(latest_ms)}</td>
+                    <td class="cm-gap">{gap_str}</td>
+                    <td>{fuel_html}</td>
+                    <td>{speed_html}</td>
+                </tr>
+                """
+            )
         )
 
     table_html = (
