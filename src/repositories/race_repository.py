@@ -232,6 +232,34 @@ class RaceRepository:
         rows = session.execute(stmt).all()
         return {int(car_id): int(count) for car_id, count in rows}
 
+    def latest_event_type(
+        self,
+        session: Session,
+        race_id: int,
+        event_types: Sequence[str],
+    ) -> str | None:
+        """Return the ``event_type`` of the most recent matching event for a
+        race, or ``None`` if no event with one of the given types exists.
+
+        Used by services to reconcile ephemeral in-memory caches from the
+        authoritative event log (e.g. safety-car flag after a process
+        restart). Ordering is ``(timestamp_iso DESC, id DESC)`` so ties on
+        the timestamp prefer the row inserted last.
+        """
+        if not event_types:
+            return None
+        stmt = (
+            select(RaceEvent.event_type)
+            .where(
+                RaceEvent.race_id == race_id,
+                RaceEvent.event_type.in_(list(event_types)),
+            )
+            .order_by(RaceEvent.timestamp_iso.desc(), RaceEvent.id.desc())
+            .limit(1)
+        )
+        row = session.execute(stmt).scalar_one_or_none()
+        return row
+
     # -- DTO helpers ----------------------------------------------------
 
     @staticmethod

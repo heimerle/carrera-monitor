@@ -297,7 +297,7 @@ class RaceService:
                     f"safety car can only be toggled while the race is running "
                     f"or paused (current status={race.status!r})"
                 )
-            current = self._safety_car_active.get(race_id, False)
+            current = self.is_safety_car_active(race_id)
             if current == active:
                 return current
             now = utcnow_naive()
@@ -323,8 +323,41 @@ class RaceService:
             return active
 
     def is_safety_car_active(self, race_id: int) -> bool:
-        """Return True if the safety-car phase is currently active."""
-        return self._safety_car_active.get(race_id, False)
+        """Return True if the safety-car phase is currently active.
+
+        Safety-car is only meaningful while the race is ``running`` or
+        ``paused``; for any other status the flag is always ``False`` (and
+        the in-memory cache is cleared as a side-effect, mirroring the
+        ``pop`` performed by :meth:`finish_race` / :meth:`cancel_race`).
+
+        On cache miss for an active race (e.g. after a process restart)
+        the value is reconciled from the authoritative ``race_events``
+        log: the most recent ``safety_car_started`` / ``safety_car_ended``
+        row wins. Absence of either event type → ``False``. The
+        reconciled value is cached so subsequent reads stay O(1).
+        """
+        try:
+            with SessionLocal() as session:
+                race = self._repo.get_race(session, race_id)
+                if race is None or race.status not in {"running", "paused"}:
+                    self._safety_car_active.pop(race_id, None)
+                    return False
+                if race_id in self._safety_car_active:
+                    return self._safety_car_active[race_id]
+                last = self._repo.latest_event_type(
+                    session,
+                    race_id,
+                    ("safety_car_started", "safety_car_ended"),
+                )
+        except SQLAlchemyError:
+            logger.exception(
+                "race_service: failed to reconcile safety-car flag for race id=%d",
+                race_id,
+            )
+            return False
+        active = last == "safety_car_started"
+        self._safety_car_active[race_id] = active
+        return active
 
     # -------------------------------------------------------- Ingest API
 

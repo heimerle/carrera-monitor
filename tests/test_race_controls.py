@@ -252,6 +252,55 @@ def test_safety_car_cleared_on_cancel(engine):
     assert svc.is_safety_car_active(race.id) is False
 
 
+def test_safety_car_reconciled_from_event_log_on_fresh_service(engine):
+    """A fresh ``RaceService`` (simulating a process restart) must
+    reconcile the safety-car flag from the authoritative ``race_events``
+    log instead of defaulting to ``False`` when the in-memory cache is
+    empty.
+    """
+    svc = RaceService()
+    race = svc.create_race(_payload())
+    svc.start_race(race.id)
+    svc.set_safety_car(race.id, True)
+
+    # New service instance with an empty cache — must still see ON.
+    fresh = RaceService()
+    assert fresh.is_safety_car_active(race.id) is True
+
+    # Re-asserting ON via the fresh instance is a no-op (idempotency
+    # survives the restart): the event-row count must stay at 1.
+    fresh.set_safety_car(race.id, True)
+    from sqlalchemy import func, select
+
+    from src.database import SessionLocal
+    from src.models import RaceEvent
+
+    with SessionLocal() as session:
+        count = session.execute(
+            select(func.count(RaceEvent.id)).where(
+                RaceEvent.race_id == race.id,
+                RaceEvent.event_type.in_(
+                    ("safety_car_started", "safety_car_ended")
+                ),
+            )
+        ).scalar_one()
+    assert count == 1
+
+
+def test_safety_car_reconciled_off_when_last_event_is_ended(engine):
+    """If the last safety-car event for a race is ``safety_car_ended``,
+    a fresh service must reconcile to ``False``.
+    """
+    svc = RaceService()
+    race = svc.create_race(_payload())
+    svc.start_race(race.id)
+    svc.set_safety_car(race.id, True)
+    svc.set_safety_car(race.id, False)
+
+    fresh = RaceService()
+    assert fresh.is_safety_car_active(race.id) is False
+
+
 # --------------------------------------------------------------- runtime mock
 
 

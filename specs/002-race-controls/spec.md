@@ -98,7 +98,7 @@ The user opens the Settings page and flips a **Mock mode (race simulator)** togg
 - **FR-222**: `RuntimeSettings` MUST expose `get_mock_mode() -> bool` and `set_mock_mode(value: bool) -> bool` plus module-level helpers backed by a default singleton.
 - **FR-223**: The Settings Streamlit page MUST present a **Mock mode (race simulator)** toggle that persists immediately on change.
 - **FR-224**: The Settings page MUST display a "restart required" notice + a "CLI flags override" notice.
-- **FR-225**: `src/main.py` adapter selection MUST follow the precedence: explicit `--mac` > explicit `--mock` > `runtime_settings.mock_mode`. Concretely: `use_mock = args.mock OR (args.mac is None AND runtime_settings.get_mock_mode())`.
+- **FR-225**: `src/main.py` adapter selection MUST follow the precedence: explicit `--mac` > explicit `--mock` > `runtime_settings.mock_mode`. Concretely: `use_mock = args.mock OR (args.mac is None AND runtime_settings.get_mock_mode())`. If reading the persisted settings raises `OSError`, the pipeline MUST log a WARNING and fall back to `use_mock = False` (live adapter) rather than aborting startup.
 - **FR-226**: `data/runtime_settings.json` MUST be gitignored (covered by existing `data/` rule).
 
 #### Architecture
@@ -116,7 +116,7 @@ The user opens the Settings page and flips a **Mock mode (race simulator)** togg
 
 ### Measurable Outcomes
 
-- **SC-201**: A user can finish a running race in ≤ 1 UI click, with `<100 ms` round-trip from click to UI re-render.
+- **SC-201**: A user can finish a running race in ≤ 1 UI click; the finish operation completes within one Streamlit rerun (no perceptible delay on a local SQLite database). The previous hard `<100 ms` budget was a guideline only and is not asserted by automated tests.
 - **SC-202**: 100% of user-initiated finishes persist `triggered_by='user'`; 100% of auto-finishes persist `triggered_by='auto'`. Verified by unit tests.
 - **SC-203**: Safety-car toggle round-trip (UI → DB → UI re-render) is idempotent under double-click: re-asserting the same value writes zero additional event rows. Verified by unit test.
 - **SC-204**: `data/runtime_settings.json` survives process restart and is read on the next `carrera-monitor` boot to select the adapter.
