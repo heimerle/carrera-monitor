@@ -92,7 +92,7 @@ Set in `config.yaml` (all optional; defaults are sensible):
 live:
   reconnect_interval_seconds: 1        # Initial backoff sleep
   max_reconnect_interval_seconds: 30   # Cap on backoff sleep (clamped >= initial)
-  idle_watchdog_seconds: <see code>    # Watchdog window for silent AppConnect stalls
+  idle_timeout_seconds: 15             # BLE idle-watchdog window (default 15s; clamped to >= 3s)
 ```
 
 CLI overrides (from [specs/main/contracts/cli.md](../../main/contracts/cli.md)) take precedence over `config.yaml`.

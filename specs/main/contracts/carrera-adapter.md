@@ -2,6 +2,8 @@
 
 Internal Python contract that both the real (`carreralib`-backed) client and the mock client implement. It is the seam that keeps the rest of the system hardware-agnostic.
 
+**Status note**: The post-003 in-tree implementation in [src/carrera_client.py](../../../src/carrera_client.py) and [src/mock_client.py](../../../src/mock_client.py) has converged on `events()` yielding fully-translated `TelemetryEvent` objects (not raw frames) so the runner can stay translation-agnostic. The original raw-frame contract below is preserved for historical reference; the **authoritative** post-003 shape is captured in [specs/003-live-adapter-carreralib/contracts/live-adapter.md](../../003-live-adapter-carreralib/contracts/live-adapter.md).
+
 ## Protocol
 
 ```python
@@ -9,11 +11,11 @@ from typing import AsyncIterator, Protocol, runtime_checkable
 
 @runtime_checkable
 class CarreraAdapter(Protocol):
-    source_name: str  # "carrera_appconnect" | "mock"
+    source_name: str  # "carrera_appconnect" (live) | "mock"
 
     async def connect(self, mac_address: str | None) -> None: ...
     async def disconnect(self) -> None: ...
-    def events(self) -> AsyncIterator["RawFrame"]: ...
+    def events(self) -> AsyncIterator["TelemetryEvent"]: ...
     async def discovered_devices(self) -> list["DiscoveredDevice"]: ...
 ```
 
@@ -32,9 +34,9 @@ class CarreraAdapter(Protocol):
 
 ### `events()`
 
-- Returns an async iterator that yields `RawFrame` (a loosely typed dict with at least a `kind: str` discriminator).
+- Returns an async iterator that yields **translated `TelemetryEvent` objects** (the post-003 shape; see status note above for the historical `RawFrame` contract).
 - Iteration MUST stop cleanly when `disconnect()` is called.
-- On BLE errors during iteration, raises `AdapterReadError`; caller (`carrera_client.py`) catches and triggers reconnect logic.
+- On reader-task failure during iteration, the iterator MUST surface the underlying exception (per 003/FR-005) so `CarreraClientRunner` can trigger reconnect logic.
 
 ### `discovered_devices()`
 

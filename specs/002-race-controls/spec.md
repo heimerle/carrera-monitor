@@ -98,7 +98,7 @@ The user opens the Settings page and flips a **Mock mode (race simulator)** togg
 - **FR-222**: `RuntimeSettings` MUST expose `get_mock_mode() -> bool` and `set_mock_mode(value: bool) -> bool` plus module-level helpers backed by a default singleton.
 - **FR-223**: The Settings Streamlit page MUST present a **Mock mode (race simulator)** toggle that persists immediately on change.
 - **FR-224**: The Settings page MUST display a "restart required" notice + a "CLI flags override" notice.
-- **FR-225**: `src/main.py` adapter selection MUST follow the precedence: explicit `--mac` > explicit `--mock` > `runtime_settings.mock_mode`. Concretely: `use_mock = args.mock OR (args.mac is None AND runtime_settings.get_mock_mode())`. If reading the persisted settings raises `OSError`, the pipeline MUST log a WARNING and fall back to `use_mock = False` (live adapter) rather than aborting startup.
+- **FR-225**: `src/main.py` adapter selection MUST follow the precedence: **explicit `--mock` > explicit `--mac` > `runtime_settings.mock_mode`**. Concretely: `use_mock = args.mock OR (args.mac is None AND runtime_settings.get_mock_mode())` — i.e. if both `--mock` and `--mac` are passed, `--mock` wins and `--mac` is ignored (matching `specs/main/contracts/cli.md`). If reading the persisted settings raises `OSError`, the pipeline MUST log a WARNING (e.g. `WARNING runtime_settings: read failed (<cause>); defaulting to live adapter`) and fall back to `use_mock = False` (live adapter) rather than aborting startup.
 - **FR-226**: `data/runtime_settings.json` MUST be gitignored (covered by existing `data/` rule).
 
 #### Architecture
