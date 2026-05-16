@@ -80,8 +80,9 @@ class TelemetryEvent(BaseModel):
     timestamp_monotonic_ms: int = Field(ge=0)
     source: Literal["carrera_appconnect", "mock", "system"]
     event_type: EventType
-    car_id: int | None = Field(default=None, ge=1, le=6)
-    controller_id: int | None = Field(default=None, ge=1, le=6)
+    # Carrera DIGITAL can report up to 8 car slots.
+    car_id: int | None = Field(default=None, ge=1, le=8)
+    controller_id: int | None = Field(default=None, ge=1, le=8)
     payload: dict[str, Any] = Field(default_factory=dict)
     raw_data: dict[str, Any] | None = None
     metadata: dict[str, str] = Field(default_factory=dict)

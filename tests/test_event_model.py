@@ -105,12 +105,12 @@ class TestPayloadShapes:
 
 
 class TestCarIdRange:
-    @pytest.mark.parametrize("car_id", [0, 7, -1, 100])
+    @pytest.mark.parametrize("car_id", [0, 9, -1, 100])
     def test_invalid_car_id_rejected(self, car_id):
         with pytest.raises(ValidationError):
             TelemetryEvent(**_base(car_id=car_id))
 
-    @pytest.mark.parametrize("car_id", [1, 2, 3, 4, 5, 6, None])
+    @pytest.mark.parametrize("car_id", [1, 2, 3, 4, 5, 6, 7, 8, None])
     def test_valid_car_id_accepted(self, car_id):
         e = TelemetryEvent(
             **_base(car_id=car_id, event_type=EventType.RACE_STATE, payload={"state": "running"})
