@@ -363,7 +363,7 @@ def _render_recent(state: dict[str, Any]) -> None:
                     "payload": payload,
                 }
             )
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
 
 
 def _render_body(state_file: Path, refresh_ms: int) -> None:
