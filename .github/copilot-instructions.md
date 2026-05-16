@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/003-live-adapter-carreralib/plan.md](../specs/003-live-adapter-carreralib/plan.md).
+[specs/005-bluetooth-connection-supervisor/plan.md](../specs/005-bluetooth-connection-supervisor/plan.md).
 <!-- SPECKIT END -->
 
 
