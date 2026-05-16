@@ -2,7 +2,7 @@
 
 **Branch**: `002-race-controls` | **Date**: 2026-05-16 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/002-race-controls/spec.md`
-**Status**: Implemented (merged to `main` via PR #5, commit `4ce8570`). This plan is retroactive — it documents the design that shipped so that follow-up speckit slices have a normal `plan.md → tasks.md` anchor.
+**Status**: Implemented (merged to `main` via PR #5, commit `4ce8570`). This plan is retroactive — it documents the design that shipped so that follow-up speckit slices have a normal `plan.md → tasks.md` anchor. The production code landed in PR #5; the retroactive speckit artefacts (this `plan.md`, `tasks.md`, refreshed `spec.md`) shipped in PR #6.
 
 ## Summary
 
@@ -22,7 +22,7 @@ No new ORM tables, no schema migrations, no new dependencies. Service layer rema
 **Testing**: `pytest` with the existing in-memory-SQLite fixtures (`db_session`, `race_factory`).
 **Target Platform**: unchanged (single-user dev workstation).
 **Project Type**: unchanged (single Python package).
-**Performance Goals**: UI round-trip < 100 ms for finish/safety-car click (SC-201).
+**Performance Goals**: finish / safety-car click completes within one Streamlit rerun on a local SQLite database (qualitative; not asserted by automated tests — see SC-201).
 **Constraints**: UI layer remains ORM-free (FR-130); telemetry pipeline must not crash on DB errors (FR-121); ruff + mypy strict on `src/` must stay green.
 **Scale/Scope**: ≤ 6 cars, single concurrent `running` race per process (FR-110), single Streamlit user.
 
