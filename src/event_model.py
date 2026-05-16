@@ -36,9 +36,13 @@ class RaceState(StrEnum):
 
 class ConnectionState(StrEnum):
     DISCONNECTED = "disconnected"
+    MANUALLY_DISCONNECTED = "manually_disconnected"
     SCANNING = "scanning"
     CONNECTING = "connecting"
     CONNECTED = "connected"
+    SUBSCRIBING = "subscribing"
+    READY = "ready"
+    STALE = "stale"
     DEGRADED = "degraded"
     STALLED = "stalled"
     RECONNECTING = "reconnecting"
@@ -55,7 +59,23 @@ _ALLOWED_PAYLOAD_KEYS: dict[EventType, set[str]] = {
     EventType.SPEED: {"speed_kmh"},
     EventType.BRAKE: {"brake"},
     EventType.PITLANE: {"in_pit", "reason"},
-    EventType.CONNECTION_STATE: {"state", "error", "reason", "timeout_streak"},
+    EventType.CONNECTION_STATE: {
+        "state",
+        "error",
+        "reason",
+        "timeout_streak",
+        "event",
+        "desired_connected",
+        "device_id",
+        "device_name",
+        "mac_address",
+        "rssi",
+        "connected_at",
+        "disconnected_at",
+        "last_seen_at",
+        "last_rx_monotonic_ms",
+        "reconnect_attempts",
+    },
     EventType.RAW: set(),  # passthrough, raw_data carries the frame
     EventType.NOT_SUPPORTED: {"reason"},
 }
@@ -73,6 +93,17 @@ class ConnectionStateRecord(BaseModel):
     last_error: str | None = None
     reason: str | None = None
     timeout_streak: int | None = Field(default=None, ge=0)
+    event: str | None = None
+    desired_connected: bool = False
+    device_id: str | None = None
+    device_name: str | None = None
+    mac_address: str | None = None
+    rssi: int | None = None
+    connected_at: str | None = None
+    disconnected_at: str | None = None
+    last_seen_at: str | None = None
+    last_rx_monotonic_ms: int | None = Field(default=None, ge=0)
+    reconnect_attempts: int = Field(default=0, ge=0)
 
 
 class TelemetryEvent(BaseModel):
@@ -163,6 +194,37 @@ class TelemetryEvent(BaseModel):
                 not isinstance(p["timeout_streak"], int) or p["timeout_streak"] < 0
             ):
                 raise ValueError("connection_state.timeout_streak must be int >= 0")
+            if "event" in p and p["event"] is not None and not isinstance(p["event"], str):
+                raise ValueError("connection_state.event must be str or null")
+            if "desired_connected" in p and not isinstance(p["desired_connected"], bool):
+                raise ValueError("connection_state.desired_connected must be bool")
+            for text_key in (
+                "device_id",
+                "device_name",
+                "mac_address",
+                "connected_at",
+                "disconnected_at",
+                "last_seen_at",
+            ):
+                if text_key in p and p[text_key] is not None and not isinstance(p[text_key], str):
+                    raise ValueError(f"connection_state.{text_key} must be str or null")
+            if "rssi" in p and p["rssi"] is not None and not isinstance(p["rssi"], int):
+                raise ValueError("connection_state.rssi must be int or null")
+            if "last_rx_monotonic_ms" in p and (
+                p["last_rx_monotonic_ms"] is not None
+                and (
+                    not isinstance(p["last_rx_monotonic_ms"], int)
+                    or p["last_rx_monotonic_ms"] < 0
+                )
+            ):
+                raise ValueError(
+                    "connection_state.last_rx_monotonic_ms must be int >= 0 or null"
+                )
+            if "reconnect_attempts" in p and (
+                not isinstance(p["reconnect_attempts"], int)
+                or p["reconnect_attempts"] < 0
+            ):
+                raise ValueError("connection_state.reconnect_attempts must be int >= 0")
         elif self.event_type is EventType.NOT_SUPPORTED:
             _require(p, "reason", str)
         return self

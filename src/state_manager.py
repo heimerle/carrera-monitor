@@ -120,19 +120,69 @@ class StateManager:
             err = event.payload.get("error")
             reason = event.payload.get("reason")
             timeout_streak = event.payload.get("timeout_streak")
+            desired_connected = event.payload.get("desired_connected")
+            reconnect_attempts = event.payload.get("reconnect_attempts")
+            last_rx_ms = event.payload.get("last_rx_monotonic_ms")
+            raw_rssi = event.payload.get("rssi")
             if (
                 new_conn_state is not self._connection.state
                 or err != self._connection.last_error
                 or reason != self._connection.reason
                 or timeout_streak != self._connection.timeout_streak
+                or desired_connected != self._connection.desired_connected
+                or reconnect_attempts != self._connection.reconnect_attempts
+                or last_rx_ms != self._connection.last_rx_monotonic_ms
             ):
                 self._connection = ConnectionStateRecord(
                     state=new_conn_state,
                     since_ms=event.timestamp_monotonic_ms,
                     last_error=err,
+                    event=(
+                        event.payload.get("event")
+                        if isinstance(event.payload.get("event"), str)
+                        else None
+                    ),
                     reason=reason if isinstance(reason, str) else None,
                     timeout_streak=(
-                        int(timeout_streak) if isinstance(timeout_streak, int) else None
+                        timeout_streak if isinstance(timeout_streak, int) else None
+                    ),
+                    desired_connected=(
+                        desired_connected if isinstance(desired_connected, bool) else False
+                    ),
+                    device_id=(
+                        event.payload.get("device_id")
+                        if isinstance(event.payload.get("device_id"), str)
+                        else None
+                    ),
+                    device_name=(
+                        event.payload.get("device_name")
+                        if isinstance(event.payload.get("device_name"), str)
+                        else None
+                    ),
+                    mac_address=(
+                        event.payload.get("mac_address")
+                        if isinstance(event.payload.get("mac_address"), str)
+                        else None
+                    ),
+                    rssi=raw_rssi if isinstance(raw_rssi, int) else None,
+                    connected_at=(
+                        event.payload.get("connected_at")
+                        if isinstance(event.payload.get("connected_at"), str)
+                        else None
+                    ),
+                    disconnected_at=(
+                        event.payload.get("disconnected_at")
+                        if isinstance(event.payload.get("disconnected_at"), str)
+                        else None
+                    ),
+                    last_seen_at=(
+                        event.payload.get("last_seen_at")
+                        if isinstance(event.payload.get("last_seen_at"), str)
+                        else None
+                    ),
+                    last_rx_monotonic_ms=last_rx_ms if isinstance(last_rx_ms, int) else None,
+                    reconnect_attempts=(
+                        reconnect_attempts if isinstance(reconnect_attempts, int) else 0
                     ),
                 )
 
@@ -146,8 +196,19 @@ class StateManager:
                 "state": self._connection.state.value,
                 "since_ms": self._connection.since_ms,
                 "last_error": self._connection.last_error,
+                "event": self._connection.event,
                 "reason": self._connection.reason,
                 "timeout_streak": self._connection.timeout_streak,
+                "desired_connected": self._connection.desired_connected,
+                "device_id": self._connection.device_id,
+                "device_name": self._connection.device_name,
+                "mac_address": self._connection.mac_address,
+                "rssi": self._connection.rssi,
+                "connected_at": self._connection.connected_at,
+                "disconnected_at": self._connection.disconnected_at,
+                "last_seen_at": self._connection.last_seen_at,
+                "last_rx_monotonic_ms": self._connection.last_rx_monotonic_ms,
+                "reconnect_attempts": self._connection.reconnect_attempts,
             },
             "race": self._race_state.value,
             "active_car_ids": active["active_car_ids"],

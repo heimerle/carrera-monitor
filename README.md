@@ -17,6 +17,9 @@ and watch a live Streamlit dashboard — all from one process.
 - **Resilient.** Auto-reconnect with explicit `connection_state`
   transitions, drop-oldest backpressure on the event bus, and graceful
   SIGINT/SIGTERM shutdown.
+- **Supervisor-based BLE lifecycle.** A long-running
+  `BluetoothConnectionSupervisor` owns live connect/disconnect/reconnect
+  behavior outside Streamlit reruns.
 
 ## Quickstart (mock mode, no hardware)
 
@@ -55,21 +58,41 @@ YAML (defaults shown in [config.example.yaml](config.example.yaml)):
 ```yaml
 bluetooth:
   scan_timeout_seconds: 10
+  connect_timeout_seconds: 15
   reconnect_interval_seconds: 5
+  max_reconnect_interval_seconds: 30
+  reconnect_backoff_seconds: [1, 2, 5, 10, 20, 30]
+  stale_timeout_seconds: 10
+  reconnect_on_stale: true
+  allow_manual_connect: true
+  allow_manual_disconnect: true
+  prefer_scan_device_object: true
   mac_address: null         # null = scan
 logging:
   directory: logs
-  csv_enabled: true
+  csv_laps_enabled: true
   debug_raw_enabled: false  # also dumps raw frames as "raw" events
 dashboard:
   enabled: true
-  refresh_interval_ms: 250
+  refresh_interval_ms: 200
   port: 8501
 cars:
   count: 6
 ```
 
 Pass with `--config path/to/config.yaml`. CLI flags override.
+
+### Bluetooth controls in Streamlit
+
+The **Settings** page now acts as a UI proxy:
+
+- it writes connect/disconnect/scan/retry requests to
+  `data/runtime_settings.json`
+- the runtime process executes those commands in the supervisor
+- status is read from `logs/state.json` (`connection` section)
+
+Displayed Bluetooth status includes desired state, selected device,
+last-seen telemetry timestamp, reconnect attempts, and latest error.
 
 ## Architecture
 
@@ -118,5 +141,5 @@ ruff check src tests
 mypy src
 ```
 
-52 tests across event schema, mock client, storage, state manager, and
-adapter contract.
+The suite covers event schema, supervisor/service lifecycle behavior,
+mock client, storage, state manager, and adapter contracts.

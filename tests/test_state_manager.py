@@ -142,3 +142,37 @@ def test_connection_transitions(tmp_path: Path):
     assert "connection_state" in types_in_recent
     # Both transitions should be in recent_events (newest-first deque).
     assert types_in_recent.count("connection_state") >= 3
+
+
+def test_connection_snapshot_includes_supervisor_fields(tmp_path: Path):
+    mgr = _make_mgr(tmp_path)
+    mgr.apply(
+        _ev(
+            EventType.CONNECTION_STATE,
+            payload={
+                "event": "bluetooth_ready",
+                "state": "ready",
+                "desired_connected": True,
+                "device_id": "AA:BB:CC:DD:EE:FF",
+                "device_name": "Control_Unit",
+                "mac_address": "AA:BB:CC:DD:EE:FF",
+                "rssi": -60,
+                "connected_at": "2026-01-01T12:00:00+00:00",
+                "disconnected_at": None,
+                "last_seen_at": "2026-01-01T12:00:02+00:00",
+                "last_rx_monotonic_ms": 12345,
+                "reconnect_attempts": 2,
+                "reason": "subscriptions_ready",
+                "error": None,
+            },
+            ts_ms=321,
+        )
+    )
+
+    conn = mgr.snapshot()["connection"]
+    assert conn["state"] == "ready"
+    assert conn["event"] == "bluetooth_ready"
+    assert conn["desired_connected"] is True
+    assert conn["device_name"] == "Control_Unit"
+    assert conn["last_rx_monotonic_ms"] == 12345
+    assert conn["reconnect_attempts"] == 2

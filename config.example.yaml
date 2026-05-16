@@ -7,10 +7,17 @@ bluetooth:
   # performed at startup. Ignored in --mock mode.
   mac_address: null
   scan_timeout_seconds: 10
+  connect_timeout_seconds: 15
   reconnect_interval_seconds: 5
   max_reconnect_interval_seconds: 30
+  reconnect_backoff_seconds: [1, 2, 5, 10, 20, 30]
   idle_timeout_seconds: 15
   idle_warning_seconds: 5
+  stale_timeout_seconds: 10
+  reconnect_on_stale: true
+  allow_manual_connect: true
+  allow_manual_disconnect: true
+  prefer_scan_device_object: true
   # 0 disables periodic forced reconnect; liveness/watchdog remains primary.
   periodic_forced_reconnect_seconds: 0
   periodic_reconnect_only_when_not_running: true

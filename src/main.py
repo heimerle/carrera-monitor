@@ -31,7 +31,7 @@ from .event_bus import EventBus
 from .mock_client import MockCarreraAdapter
 from .race_runner import RaceTelemetryRunner
 from .services.race_service import RaceService
-from .services.runtime_settings import get_mock_mode
+from .services.runtime_settings import RuntimeSettings, get_mock_mode
 from .state_manager import StateManager
 from .storage import JsonlEventWriter
 
@@ -168,6 +168,7 @@ async def run(args: argparse.Namespace) -> int:
     # live mode. See ``resolve_use_mock`` for the pure-logic helper that
     # codifies FR-225's precedence.
     use_mock = resolve_use_mock(cli_mock=bool(args.mock), cli_mac=args.mac)
+    adapter: Any
     if use_mock:
         adapter = MockCarreraAdapter(
             car_count=cfg.cars.count,
@@ -180,21 +181,11 @@ async def run(args: argparse.Namespace) -> int:
             (not args.mock) and (args.mac is None),
         )
     else:
-        # Lazy import so mock mode never touches carreralib code paths.
-        from .carrera_client import CarreraClientRunner
+        from .services.bluetooth_connection_supervisor import BluetoothConnectionSupervisor
 
-        adapter = CarreraClientRunner(  # type: ignore[assignment]
-            mac_address=cfg.bluetooth.mac_address,
-            scan_timeout_seconds=cfg.bluetooth.scan_timeout_seconds,
-            reconnect_interval_seconds=cfg.bluetooth.reconnect_interval_seconds,
-            max_reconnect_interval_seconds=cfg.bluetooth.max_reconnect_interval_seconds,
-            idle_timeout_seconds=cfg.bluetooth.idle_timeout_seconds,
-            idle_warning_seconds=cfg.bluetooth.idle_warning_seconds,
-            periodic_forced_reconnect_seconds=cfg.bluetooth.periodic_forced_reconnect_seconds,
-            periodic_reconnect_only_when_not_running=(
-                cfg.bluetooth.periodic_reconnect_only_when_not_running
-            ),
-            debug_raw=cfg.logging.debug_raw_enabled,
+        adapter = BluetoothConnectionSupervisor(
+            config=cfg.bluetooth,
+            runtime_settings=RuntimeSettings(),
         )
         await adapter.connect(cfg.bluetooth.mac_address)
 
@@ -245,7 +236,10 @@ async def run(args: argparse.Namespace) -> int:
         with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError, Exception):
             await asyncio.wait_for(pump_task, timeout=1.0)
         try:
-            await adapter.disconnect()
+            if hasattr(adapter, "shutdown"):
+                await adapter.shutdown()
+            else:
+                await adapter.disconnect()
         except Exception:
             logger.exception("shutdown: adapter disconnect failed")
         await state_mgr.stop()

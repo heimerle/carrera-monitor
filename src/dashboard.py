@@ -70,13 +70,17 @@ def _car_color(car_id: int) -> str:
 def _connection_color(state: str) -> str:
     return {
         "connected": "#22C55E",
+        "ready": "#22C55E",
         "healthy": "#22C55E",
+        "subscribing": "#F59E0B",
         "degraded": "#F59E0B",
+        "stale": "#EF4444",
         "stalled": "#EF4444",
         "connecting": "#F59E0B",
         "scanning": "#F59E0B",
         "reconnecting": "#EF4444",
         "error": "#EF4444",
+        "manually_disconnected": "#6B7280",
         "disconnected": "#6B7280",
     }.get(state, "#6B7280")
 
@@ -215,8 +219,19 @@ def _render_header(state: dict[str, Any]) -> None:
     conn = state.get("connection") or {}
     conn_state = str(conn.get("state", "?"))
     conn_reason = conn.get("reason")
+    desired_connected = bool(conn.get("desired_connected", False))
+    device_name = conn.get("device_name") if isinstance(conn.get("device_name"), str) else None
+    mac_address = conn.get("mac_address") if isinstance(conn.get("mac_address"), str) else None
+    last_seen = conn.get("last_seen_at") if isinstance(conn.get("last_seen_at"), str) else None
+    reconnect_attempts_raw = conn.get("reconnect_attempts")
+    reconnect_attempts = (
+        int(reconnect_attempts_raw)
+        if isinstance(reconnect_attempts_raw, (int, float, str))
+        else 0
+    )
     race_state = str(state.get("race", "idle"))
-    active_car_count = int(state.get("active_car_count") or 0)
+    active_raw = state.get("active_car_count")
+    active_car_count = int(active_raw) if isinstance(active_raw, (int, float, str)) else 0
     last_err = conn.get("last_error")
 
     err_html = ""
@@ -232,6 +247,23 @@ def _render_header(state: dict[str, Any]) -> None:
             f"REASON · {conn_reason}</span>"
         )
 
+    stale_html = ""
+    if conn_state == "stale":
+        stale_html = (
+            '<span class="cm-badge" style="color:#fecaca;border-color:#7f1d1d;">'
+            "STALE TELEMETRY</span>"
+        )
+
+    device_html = ""
+    if device_name or mac_address:
+        label = device_name or "unknown"
+        suffix = f" · {mac_address}" if mac_address else ""
+        device_html = f'<span class="cm-badge">DEVICE · {label}{suffix}</span>'
+
+    last_seen_html = ""
+    if last_seen:
+        last_seen_html = f'<span class="cm-badge">LAST SEEN · {last_seen}</span>'
+
     st.html(
         dedent(
             f"""\
@@ -240,7 +272,12 @@ def _render_header(state: dict[str, Any]) -> None:
                 <div class="cm-badges">
                     {err_html}
                     {reason_html}
+                    {stale_html}
+                    {device_html}
+                    {last_seen_html}
                     <span class="cm-badge">CARS · {active_car_count}</span>
+                    <span class="cm-badge">DESIRED · {str(desired_connected).upper()}</span>
+                    <span class="cm-badge">RETRIES · {reconnect_attempts}</span>
                     <span class="cm-badge">
                         <span class="dot" style="background:{_race_color(race_state)}"></span>
                         RACE · {race_state.upper()}

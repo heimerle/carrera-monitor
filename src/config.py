@@ -21,10 +21,17 @@ class BluetoothConfig(BaseModel):
 
     mac_address: str | None = None
     scan_timeout_seconds: int = Field(default=10, ge=1)
+    connect_timeout_seconds: int = Field(default=15, ge=1)
     reconnect_interval_seconds: int = Field(default=5, ge=1)
     max_reconnect_interval_seconds: int = Field(default=30, ge=1)
+    reconnect_backoff_seconds: list[int] = Field(default_factory=lambda: [1, 2, 5, 10, 20, 30])
     idle_timeout_seconds: int = Field(default=15, ge=3)
     idle_warning_seconds: int = Field(default=5, ge=1)
+    stale_timeout_seconds: int = Field(default=10, ge=1)
+    reconnect_on_stale: bool = True
+    allow_manual_connect: bool = True
+    allow_manual_disconnect: bool = True
+    prefer_scan_device_object: bool = True
     periodic_forced_reconnect_seconds: int = Field(default=0, ge=0)
     periodic_reconnect_only_when_not_running: bool = True
 
@@ -35,6 +42,10 @@ class BluetoothConfig(BaseModel):
                 "bluetooth.max_reconnect_interval_seconds must be >= "
                 "bluetooth.reconnect_interval_seconds"
             )
+        if not self.reconnect_backoff_seconds:
+            raise ValueError("bluetooth.reconnect_backoff_seconds must not be empty")
+        if any(v <= 0 for v in self.reconnect_backoff_seconds):
+            raise ValueError("bluetooth.reconnect_backoff_seconds values must be > 0")
         if self.idle_warning_seconds >= self.idle_timeout_seconds:
             raise ValueError(
                 "bluetooth.idle_warning_seconds must be < "

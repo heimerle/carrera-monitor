@@ -1,1 +1,5 @@
-"""Pydantic DTO package for the race-management module."""
+"""Pydantic DTO package exports."""
+
+from .bluetooth_schema import BluetoothConnectionStatus, BluetoothDevice, BluetoothState
+
+__all__ = ["BluetoothConnectionStatus", "BluetoothDevice", "BluetoothState"]

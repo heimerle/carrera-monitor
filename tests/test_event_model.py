@@ -62,6 +62,25 @@ class TestPayloadShapes:
                     "timeout_streak": 5,
                 },
             ),
+            (
+                EventType.CONNECTION_STATE,
+                {
+                    "event": "bluetooth_ready",
+                    "state": "ready",
+                    "desired_connected": True,
+                    "device_id": "AA:BB:CC:DD:EE:FF",
+                    "device_name": "Control_Unit",
+                    "mac_address": "AA:BB:CC:DD:EE:FF",
+                    "rssi": -55,
+                    "connected_at": "2026-01-01T12:00:00+00:00",
+                    "disconnected_at": None,
+                    "last_seen_at": "2026-01-01T12:00:01+00:00",
+                    "last_rx_monotonic_ms": 123,
+                    "reconnect_attempts": 0,
+                    "reason": "subscriptions_ready",
+                    "error": None,
+                },
+            ),
             (EventType.NOT_SUPPORTED, {"reason": "unknown frame"}),
         ],
     )
@@ -109,6 +128,18 @@ class TestPayloadShapes:
                 **_base(
                     event_type=EventType.RACE_STATE,
                     payload={"state": "warp_speed"},
+                )
+            )
+
+    def test_connection_state_invalid_desired_connected_type_rejected(self):
+        with pytest.raises(ValidationError):
+            TelemetryEvent(
+                **_base(
+                    event_type=EventType.CONNECTION_STATE,
+                    payload={
+                        "state": "ready",
+                        "desired_connected": "yes",
+                    },
                 )
             )
 
