@@ -20,6 +20,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -35,6 +36,35 @@ from .state_manager import StateManager
 from .storage import JsonlEventWriter
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_use_mock(
+    *,
+    cli_mock: bool,
+    cli_mac: str | None,
+    get_mock_mode_fn: Any = get_mock_mode,
+) -> bool:
+    """Adapter-selection precedence per FR-225.
+
+    Returns True iff the mock adapter should be used. Order:
+      1. ``--mock`` CLI flag wins outright.
+      2. ``--mac`` CLI flag forces live (returns False).
+      3. Otherwise consult the persisted UI toggle via ``get_mock_mode_fn``.
+      4. If the settings lookup raises ``OSError``, log a warning and
+         fall back to live (False) so a broken settings file never blocks
+         startup.
+    """
+    if cli_mock:
+        return True
+    if cli_mac is not None:
+        return False
+    try:
+        return bool(get_mock_mode_fn())
+    except OSError:
+        logger.warning(
+            "main: failed to read runtime_settings, assuming live mode"
+        )
+        return False
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -135,14 +165,9 @@ async def run(args: argparse.Namespace) -> int:
     # UI toggle (data/runtime_settings.json → mock_mode) is honoured so users
     # can flip simulator on/off from the Streamlit Settings page without
     # editing the launch command. A live ``--mac`` override always implies
-    # live mode.
-    use_mock = bool(args.mock)
-    if not use_mock and args.mac is None:
-        try:
-            use_mock = get_mock_mode()
-        except OSError:
-            logger.warning("main: failed to read runtime_settings, assuming live mode")
-            use_mock = False
+    # live mode. See ``resolve_use_mock`` for the pure-logic helper that
+    # codifies FR-225's precedence.
+    use_mock = resolve_use_mock(cli_mock=bool(args.mock), cli_mac=args.mac)
     if use_mock:
         adapter = MockCarreraAdapter(
             car_count=cfg.cars.count,
