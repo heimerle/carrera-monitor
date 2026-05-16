@@ -13,7 +13,7 @@ The user opens the Streamlit dashboard, clicks the **⋮** kebab menu in the hea
 
 **Why this priority**: Today the only way to bind to a specific Control Unit is to memorize the MAC and pass it as `--mac` on the CLI, or to let the pipeline scan on every start. A one-click UI flow eliminates both pain points and is the smallest possible incremental UX win.
 
-**Independent Test**: With `carreralib` installed and an AppConnect powered on, open the dashboard, click **⋮ → 🔌 Bluetooth verbinden**. Assert: (a) one or more devices appear with MAC + name; (b) clicking **Auswählen** writes the MAC to `data/runtime_settings.json`; (c) the page shows a "Restart erforderlich" `st.warning`; (d) on the next `python -m src.main` start (no `--mac` on the CLI), the live adapter connects to that MAC.
+**Independent Test**: With `carreralib` installed and an AppConnect powered on, open the dashboard, click **⋮ → 🔌 Bluetooth verbinden**. Assert: (a) one or more devices appear with MAC + name; (b) clicking **Auswählen** writes the MAC to `data/runtime_settings.json`; (c) the page shows a "Gespeichert. Restart erforderlich." `st.success` notice; (d) on the next `python -m src.main` start (no `--mac` on the CLI), the live adapter connects to that MAC.
 
 **Acceptance Scenarios**:
 
@@ -25,8 +25,8 @@ The user opens the Streamlit dashboard, clicks the **⋮** kebab menu in the hea
 
 ### Edge Cases
 
-- BLE scan raises a non-ImportError exception (permission denied on macOS, hardware missing) → popover shows `st.error(str(exc))` and offers a retry button; no crash.
-- User clicks **Auswählen** while the runtime-settings file directory is read-only → catch `OSError`, surface via `st.error`, do not corrupt state.
+- BLE scan raises a non-ImportError exception (permission denied on macOS, hardware missing) → popover shows `st.error(str(exc))`. The user can simply click **🔌 Bluetooth verbinden** again to retry; no separate retry button is required.
+- User clicks **Auswählen** while the runtime-settings file directory is read-only → catch `OSError`, surface via `st.error(str(exc))`, do not corrupt state.
 - A `--mac` CLI argument is present at next boot → CLI wins; the persisted `bluetooth_mac` is ignored (precedence already established by 002/FR-225 for `mock_mode`; this slice extends it to `bluetooth_mac`).
 - Two concurrent Streamlit sessions click **Auswählen** with different MACs → last writer wins (file is replaced atomically per `RuntimeSettings._save`).
 
@@ -36,7 +36,7 @@ The user opens the Streamlit dashboard, clicks the **⋮** kebab menu in the hea
 
 - **FR-001**: `RuntimeSettings` MUST expose a new persisted key `bluetooth_mac: str | None` (default `None`) with `get_bluetooth_mac()` / `set_bluetooth_mac(value: str | None) -> str | None` accessors and matching module-level helpers, mirroring the existing `mock_mode` pattern.
 - **FR-002**: A new helper module `src/services/bluetooth_scanner.py` MUST expose a synchronous `scan_for_devices() -> list[tuple[str, str]]` that wraps `carreralib.connection.scan()` and returns `(mac, name)` pairs. A missing `carreralib` MUST raise `ScannerUnavailableError`; other failures MUST raise `ScannerError(str(exc))`.
-- **FR-003**: The dashboard MUST render a **⋮** kebab popover (`st.popover` with `use_container_width=False`) in the header row. The popover MUST contain a **🔌 Bluetooth verbinden** button, the currently persisted MAC (if any), and \u2014 after a scan \u2014 a list of discovered devices each with an **Auswählen** button.
+- **FR-003**: The dashboard MUST render a **⋮** kebab popover (`st.popover` with `use_container_width=False`) in the header row. The popover MUST contain a **🔌 Bluetooth verbinden** button, the currently persisted MAC (if any), and — after a scan — a list of discovered devices each with an **Auswählen** button. When the scan returns zero devices, the popover MUST render the empty-state message `Keine Geräte gefunden — ist die AppConnect eingeschaltet?` (via `st.info`).
 - **FR-004**: Clicking **Auswählen** MUST call `set_bluetooth_mac(mac)` and render `st.success("Gespeichert. Restart erforderlich.")`. Clicking **Zurücksetzen** MUST call `set_bluetooth_mac(None)` and render the same notice.
 - **FR-005**: `ScannerUnavailableError` MUST be surfaced via `st.error` with the actionable install hint; `ScannerError` MUST be surfaced via `st.error(str(exc))`. The dashboard MUST NOT crash on either path.
 - **FR-006**: `src/main.py::_apply_overrides` MUST extend its precedence chain so that when `args.mac is None` AND `cfg.bluetooth.mac_address is None`, the value of `RuntimeSettings.get_bluetooth_mac()` is used as the fallback `cfg.bluetooth.mac_address`. CLI `--mac` and `config.yaml::bluetooth.mac_address` both still win over the persisted UI choice.
