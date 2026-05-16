@@ -3,66 +3,73 @@
 **Input**: Design documents from `/specs/004-bluetooth-connect-menu/`
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/, quickstart.md
 
-**Tests**: Tests are included because the spec defines explicit verification and CI quality gates.
+**Tests**: Tests are included because the specification defines explicit verification and CI quality gates (SC-005).
+
+**Organization**: Tasks are grouped by user story so the slice can be implemented and validated independently.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Prepare the feature branch and baseline tooling for repeatable implementation.
+**Purpose**: Establish the Bluetooth domain scaffolding and shared settings primitives.
 
-- [ ] T001 Create and switch to feature branch `004-bluetooth-connect-menu` from `main` and verify clean working tree for files under specs/004-bluetooth-connect-menu/
-- [ ] T002 [P] Verify local toolchain entry points (`python -m pytest`, `python -m mypy`, `python -m ruff`) from repository root in ./
+- [ ] T001 Create Bluetooth state vocabulary module in src/state/bluetooth_state.py
+- [ ] T002 [P] Create Bluetooth schema models for status/device payloads in src/schemas/bluetooth_schema.py
+- [ ] T003 [P] Export Bluetooth modules for package-level imports in src/state/__init__.py and src/schemas/__init__.py
+- [ ] T004 Extend runtime settings defaults for Bluetooth desired state and command IPC in src/services/runtime_settings.py
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Define shared service/state contracts that all user-story work depends on.
+**Purpose**: Implement core supervisor lifecycle and data propagation required by all user-facing Bluetooth actions.
 
-- [ ] T003 Create Bluetooth lifecycle enum and status snapshot model in src/services/bluetooth_state.py
-- [ ] T004 [P] Create EventBus event payload helper for `bluetooth.state.changed` in src/services/bluetooth_events.py
-- [ ] T005 [P] Extend runtime settings schema defaults for `bluetooth_mac` and `scan_timeout_seconds` in src/services/runtime_settings.py
+**Critical**: No story-level UI workflow should be finalized before this phase is complete.
 
-**Checkpoint**: Shared Bluetooth state and event primitives are ready for story implementation.
+- [ ] T005 Implement supervisor run loop and desired-state reconciliation in src/services/bluetooth_connection_supervisor.py
+- [ ] T006 [P] Implement reconnect backoff, stale detection, and manual disconnect handling in src/services/bluetooth_connection_supervisor.py
+- [ ] T007 [P] Emit normalized lifecycle payloads for connection-state events in src/services/bluetooth_connection_supervisor.py and src/event_model.py
+- [ ] T008 Implement supervisor-backed Bluetooth service facade for runtime and UI proxy modes in src/services/bluetooth_service.py
+- [ ] T009 [P] Integrate live runtime startup/shutdown with BluetoothConnectionSupervisor in src/main.py
+- [ ] T010 [P] Extend state snapshots with enriched Bluetooth fields in src/state_manager.py
+
+**Checkpoint**: Core Bluetooth lifecycle management is stable and observable without dashboard-specific UI behavior.
 
 ---
 
-## Phase 3: User Story 1 - Connect to Carrera AppConnect from Dashboard (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - Manage Bluetooth Connection from the Dashboard (Priority: P1)
 
-**Goal**: Operator can scan/select/connect/disconnect from the overflow menu while seeing lifecycle status and preserving simulator independence.
+**Goal**: Operator can scan/connect/disconnect/retry from dashboard controls, observe accurate lifecycle state, and keep simulator mode independent.
 
-**Independent Test**: Start dashboard, open overflow menu, run scan, select device, observe `CONNECTING -> CONNECTED`, disconnect to `DISCONNECTED`, and verify startup fallback MAC still obeys CLI/config precedence.
+**Independent Test**: Use dashboard controls to trigger connect/disconnect/scan/retry, verify state transitions and persisted selection behavior, and confirm simulator mode remains unchanged.
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Add runtime settings tests for `bluetooth_mac` and bounded `scan_timeout_seconds` behavior in tests/test_race_controls.py
-- [ ] T007 [P] [US1] Add scanner service tests for success, ImportError mapping, and generic error mapping in tests/test_bluetooth_scanner.py
-- [ ] T008 [P] [US1] Add Bluetooth lifecycle/state transition tests for allowed transitions and error snapshots in tests/test_bluetooth_state_service.py
-- [ ] T009 [P] [US1] Add `_apply_overrides` precedence tests for CLI/config/persisted fallback in tests/test_main_overrides.py
-- [ ] T010 [P] [US1] Add dashboard overflow workflow tests for connect/disconnect/status/scan error rendering in tests/test_dashboard_bluetooth_menu.py
+- [ ] T011 [P] [US1] Add supervisor lifecycle transition tests in tests/test_bluetooth_connection_supervisor.py
+- [ ] T012 [P] [US1] Add stale/reconnect and duplicate-loop prevention tests in tests/test_bluetooth_connection_supervisor.py
+- [ ] T013 [P] [US1] Add Bluetooth service button-state and simulator-warning policy tests in tests/test_bluetooth_service.py
+- [ ] T014 [P] [US1] Add enriched connection payload validation tests in tests/test_event_model.py
+- [ ] T015 [P] [US1] Add connection snapshot propagation tests in tests/test_state_manager.py
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Implement scanner module with normalized device output and timeout support in src/services/bluetooth_scanner.py
-- [ ] T012 [US1] Implement connection lifecycle service (`connect`, `disconnect`, `scan`, `get_status`) with EventBus emission in src/services/bluetooth_connection_service.py
-- [ ] T013 [US1] Extend startup override fallback to persisted `bluetooth_mac` while preserving CLI/config precedence in src/main.py
-- [ ] T014 [US1] Implement overflow menu entries (Connect, Disconnect, Scan, Status) and status rendering in src/dashboard.py
-- [ ] T015 [US1] Integrate retry behavior and state transitions (`ERROR -> CONNECTING` or `ERROR -> SCANNING`) in src/dashboard.py
-- [ ] T016 [US1] Enforce simulator/mock coexistence guardrails so Bluetooth actions do not mutate simulator mode in src/dashboard.py
+- [ ] T016 [US1] Implement Settings page Bluetooth controls using request-based service calls in src/pages/settings.py
+- [ ] T017 [US1] Implement dashboard connection status rendering (device, desired state, stale, retries, last seen) in src/dashboard.py
+- [ ] T018 [US1] Implement Connect/Disconnect/Scan/Retry button enablement policy in src/services/bluetooth_service.py and src/pages/settings.py
+- [ ] T019 [US1] Persist selected device and desired connection requests via runtime settings in src/services/runtime_settings.py and src/pages/settings.py
+- [ ] T020 [US1] Enforce simulator coexistence messaging and non-mutating behavior in src/services/bluetooth_service.py and src/pages/settings.py
 
-**Checkpoint**: User Story 1 is fully functional and independently testable.
+**Checkpoint**: User Story 1 is independently functional and testable from the dashboard.
 
 ---
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-**Purpose**: Final verification, documentation sync, and release workflow.
+**Purpose**: Final verification, documentation, and release hygiene.
 
-- [ ] T017 [P] Update user-facing usage notes for overflow Bluetooth workflow in specs/004-bluetooth-connect-menu/quickstart.md
-- [ ] T018 Run full quality gate (`python -m ruff check src tests`, `python -m mypy src`, `python -m pytest -q`) from ./
-- [ ] T019 Run manual quickstart validation for connect/disconnect/scan/status/retry/simulator coexistence from specs/004-bluetooth-connect-menu/quickstart.md
-- [ ] T020 Verify no new hard dependency is introduced for this slice by checking packaging metadata and lock/update files remain unchanged for required deps in pyproject.toml
-- [ ] T021 Verify runtime settings file remains excluded from source control by checking `.gitignore` coverage and ensuring `data/runtime_settings.json` is not tracked
-- [ ] T022 Commit, push, open PR, monitor Actions via `gh api repos/heimerle/carrera-monitor/actions/runs?head_sha=$SHA`, and merge when green
+- [ ] T021 [P] Update operator documentation for Bluetooth supervisor workflow in README.md and specs/004-bluetooth-connect-menu/quickstart.md
+- [ ] T022 Run full quality gates from ./ against src/ and tests/
+- [ ] T023 Run manual quickstart validation scenarios from specs/004-bluetooth-connect-menu/quickstart.md
+- [ ] T024 Verify runtime settings tracking exclusion for data/runtime_settings.json in .gitignore
+- [ ] T025 Commit, push, and verify CI status for .github/workflows/ci.yml
 
 ---
 
@@ -71,65 +78,59 @@
 ### Phase Dependencies
 
 - Setup (Phase 1): no dependencies.
-- Foundational (Phase 2): depends on setup completion.
-- User Story 1 (Phase 3): depends on all foundational tasks T003-T005.
-- Polish (Phase 4): depends on Phase 3 completion.
+- Foundational (Phase 2): depends on Setup completion.
+- User Story 1 (Phase 3): depends on Foundational completion.
+- Polish (Phase 4): depends on User Story 1 completion.
 
 ### User Story Dependencies
 
-- User Story 1 (P1): starts after Phase 2, no dependency on other stories.
+- User Story 1 (P1): can start once Phase 2 is complete; no dependency on additional stories.
 
 ### Within User Story 1
 
-- Tests T006-T010 are authored first and should fail before implementation.
-- T011 depends on T007.
-- T012 depends on T003, T004, T008, and T011.
-- T013 depends on T005 and T009.
-- T014 depends on T012 and T010.
-- T015 depends on T014.
-- T016 depends on T014.
+- Write tests T011-T015 first and confirm failures before implementation tasks.
+- Complete T016-T018 before finalizing persistence/state edge cases in T019-T020.
+- Validate dashboard behavior after each lifecycle capability change.
 
 ## Parallel Opportunities
 
-- Foundational tasks T004 and T005 can run in parallel after T003 scope is defined.
-- Test tasks T006-T010 can run in parallel across separate test files.
-- Implementation tasks T013 and T011 can run in parallel after their prerequisite tests exist.
-- Implementation tasks T015 and T016 can run in parallel after T014 lands.
+- T002 and T003 can run in parallel after T001 scope is clear.
+- T006, T007, T009, and T010 can run in parallel after T005 skeleton is in place.
+- T011-T015 are parallelizable because they target different validation slices.
+- T021 and T024 can run in parallel during polish.
 
 ## Parallel Example: User Story 1
 
 ```bash
 # Parallel test authoring
-Task: "T006 [US1] runtime settings tests in tests/test_race_controls.py"
-Task: "T007 [US1] scanner tests in tests/test_bluetooth_scanner.py"
-Task: "T008 [US1] lifecycle tests in tests/test_bluetooth_state_service.py"
-Task: "T009 [US1] overrides tests in tests/test_main_overrides.py"
-Task: "T010 [US1] dashboard workflow tests in tests/test_dashboard_bluetooth_menu.py"
+Task: "T011 [US1] lifecycle transitions in tests/test_bluetooth_connection_supervisor.py"
+Task: "T013 [US1] service button policy in tests/test_bluetooth_service.py"
+Task: "T014 [US1] connection payload validation in tests/test_event_model.py"
 
-# Parallel implementation after tests exist
-Task: "T011 [US1] scanner implementation in src/services/bluetooth_scanner.py"
-Task: "T013 [US1] override fallback update in src/main.py"
+# Parallel implementation after test scaffolds exist
+Task: "T017 [US1] dashboard status rendering in src/dashboard.py"
+Task: "T018 [US1] button enablement policy in src/services/bluetooth_service.py and src/pages/settings.py"
 ```
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First (User Story 1)
 
 1. Complete Phase 1 and Phase 2.
-2. Complete Phase 3 for User Story 1.
-3. Validate User Story 1 independently with test suite + quickstart.
-4. Ship via PR after CI is green.
+2. Complete Phase 3 (tests first, then implementation).
+3. Validate independent Story 1 behavior from quickstart scenarios.
+4. Ship after Phase 4 quality gates are green.
 
 ### Incremental Delivery
 
-1. Land state/event foundations (T003-T005).
-2. Land scanner + override compatibility (T011, T013).
-3. Land dashboard interaction flow (T014-T016).
-4. Complete polish and release workflow (T017-T022).
+1. Land lifecycle foundation (state/schema/settings/supervisor).
+2. Land UI control flow and status rendering.
+3. Land tests and tighten edge-case behavior.
+4. Finish documentation, quality gates, and CI verification.
 
 ## Validation
 
-- All tasks use strict checklist format: `- [ ] T### [P?] [US?] Description with file path`.
-- Story tasks include `[US1]`; Setup/Foundational/Polish tasks omit story labels.
-- Each task points to a concrete file path.
-- Task ordering supports independent testing of User Story 1.
+- All checklist entries follow strict format: `- [ ] T### [P?] [US?] Description with file path`.
+- Setup, Foundational, and Polish tasks intentionally omit story labels.
+- User-story tasks are labeled `[US1]`.
+- Each task references concrete workspace paths.
