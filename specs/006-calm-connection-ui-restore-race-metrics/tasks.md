@@ -111,7 +111,7 @@
 - [X] T032 [P] Update operator verification steps and expected outcomes for this feature in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
 - [X] T033 [P] Update dashboard behavior notes for icon-only connection and always-visible metrics in README.md
 - [X] T034 Run full quality gates (ruff, mypy, pytest) and record outcomes in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
-- [ ] T035 Commit feature changes, push branch, and verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml
+- [X] T035 Commit feature changes, push branch, and verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml
 
 ---
 
