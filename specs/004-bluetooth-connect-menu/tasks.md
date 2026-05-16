@@ -60,7 +60,9 @@
 - [ ] T017 [P] Update user-facing usage notes for overflow Bluetooth workflow in specs/004-bluetooth-connect-menu/quickstart.md
 - [ ] T018 Run full quality gate (`python -m ruff check src tests`, `python -m mypy src`, `python -m pytest -q`) from ./
 - [ ] T019 Run manual quickstart validation for connect/disconnect/scan/status/retry/simulator coexistence from specs/004-bluetooth-connect-menu/quickstart.md
-- [ ] T020 Commit, push, open PR, monitor Actions via `gh api repos/heimerle/carrera-monitor/actions/runs?head_sha=$SHA`, and merge when green
+- [ ] T020 Verify no new hard dependency is introduced for this slice by checking packaging metadata and lock/update files remain unchanged for required deps in pyproject.toml
+- [ ] T021 Verify runtime settings file remains excluded from source control by checking `.gitignore` coverage and ensuring `data/runtime_settings.json` is not tracked
+- [ ] T022 Commit, push, open PR, monitor Actions via `gh api repos/heimerle/carrera-monitor/actions/runs?head_sha=$SHA`, and merge when green
 
 ---
 
@@ -123,7 +125,7 @@ Task: "T013 [US1] override fallback update in src/main.py"
 1. Land state/event foundations (T003-T005).
 2. Land scanner + override compatibility (T011, T013).
 3. Land dashboard interaction flow (T014-T016).
-4. Complete polish and release workflow (T017-T020).
+4. Complete polish and release workflow (T017-T022).
 
 ## Validation
 
