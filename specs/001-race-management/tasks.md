@@ -5,7 +5,7 @@
 **Input**: Design documents in `specs/001-race-management/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md
 
-**Tests**: Test tasks are included because the spec explicitly requires preserving the existing 52 tests (FR-134) and adding tests for each new layer (FR-132, "Add unit tests for race service, repository, lifecycle, repeat-race semantics").
+**Tests**: Test tasks are included because the spec explicitly requires preserving the existing 52 tests (FR-134) and adding tests for each new layer (FR-132, "Add unit tests for race service, repository, lifecycle, repeat-race semantics"). ("52" is the pre-001 baseline; later slices add more — see CI on `main` for the current total.)
 
 **Organization**: Tasks are grouped by user story to enable independent implementation, testing, and incremental delivery.
 
@@ -86,7 +86,7 @@
 - [X] T026 [P] [US1] Create [tests/test_race_service_lifecycle.py](tests/test_race_service_lifecycle.py): every valid transition + every invalid transition (asserts `InvalidRaceStateError`); auto-pause behavior on second `start_race`; `ActiveRaceContext` set/cleared correctly
 - [X] T027 [P] [US1] Create [tests/test_race_service_ingest.py](tests/test_race_service_ingest.py): `record_lap` inserts a row with correct `driver_name` join; drops lap when race is paused; drops lap on unknown `car_id` with warning; swallows `SQLAlchemyError` without raising; `fixed_laps` auto-finish triggers when leader reaches `lap_target`
 - [X] T028 [P] [US1] Create [tests/test_race_runner.py](tests/test_race_runner.py): publish a synthetic `lap` event through a real `EventBus`, assert the runner calls `record_lap` exactly once; assert non-lap events go to `record_event` when `persist_all_events=True`; assert the ticker calls `finish_race` when `now() > started_at + duration_seconds`
-- [X] T029 [US1] Run the full suite (`pytest`) and assert zero regressions: the original 52 tests must still pass alongside the new ones (FR-134)
+- [X] T029 [US1] Run the full suite (`pytest`) and assert zero regressions: the original 52 tests must still pass alongside the new ones (FR-134). ("52" is the pre-001 baseline at PR #1 ship time; subsequent slices add more — see CI on `main` for the current total.)
 
 **Checkpoint**: a user can create, start, run, pause/resume, finish, and cancel a race end-to-end in mock mode, with persistence verified by tests. **This is the shippable MVP.**
 

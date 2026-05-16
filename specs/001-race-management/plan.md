@@ -81,7 +81,7 @@ carrera-monitor/
 ├── data/                           # NEW — gitignored except .gitkeep
 │   └── .gitkeep
 ├── tests/
-│   ├── (existing 52 tests)
+│   ├── (existing 52 tests)              # pre-001 baseline; total drifts as later slices land (see CI on `main`)
 │   ├── test_race_repository.py     # NEW
 │   ├── test_race_service.py        # NEW
 │   ├── test_reporting_service.py   # NEW
