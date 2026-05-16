@@ -94,6 +94,17 @@ The **Settings** page now acts as a UI proxy:
 Displayed Bluetooth status includes desired state, selected device,
 last-seen telemetry timestamp, reconnect attempts, and latest error.
 
+Operator behavior guarantees:
+
+- **Manual disconnect wins**: once disconnected manually, auto-reconnect stays disabled
+  until an explicit **Connect Bluetooth** or **Retry Now** action.
+- **Retry is explicit**: **Retry Now** is enabled only in recoverable states
+  (`error`, `stale`, `disconnected`) while desired state is connected.
+- **Simulator independence**: toggling simulator mode does not change Bluetooth
+  desired state, and Bluetooth actions do not toggle simulator mode.
+- **Compatibility preserved**: downstream consumers continue to receive
+  `connection_state` events and legacy snapshot fields while enriched fields are additive.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for the producer →

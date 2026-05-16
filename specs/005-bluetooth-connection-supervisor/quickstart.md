@@ -54,3 +54,27 @@
 3. `pytest -q`
 
 All gates should pass before task decomposition and implementation handoff.
+
+## Verification Outcomes (2026-05-16)
+
+Executed in repository root:
+
+- `python -m ruff check src tests` -> pass
+- `python -m mypy src` -> pass
+- `python -m pytest -q` -> pass
+
+Result: all required quality gates passed.
+
+## SC-001 Reliability Trial Evidence (2026-05-16)
+
+Trial command:
+
+- `for i in $(seq 1 20); do pytest -q tests/test_bluetooth_connection_supervisor.py::test_unexpected_disconnect_triggers_reconnect; done`
+
+Observed results:
+
+- `disconnect_trials_pass=20`
+- `disconnect_trials_fail=0`
+- `disconnect_trials_rate_percent=100`
+
+Conclusion: reconnect recovery met and exceeded SC-001 threshold (required >=95%; observed 100%).

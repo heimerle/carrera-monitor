@@ -30,6 +30,21 @@ Runtime command bridge uses `data/runtime_settings.json` keys:
 
 ## Lifecycle Status Contract
 
+### State vocabulary
+
+Lifecycle status uses these canonical values:
+
+- `disconnected`
+- `manually_disconnected`
+- `scanning`
+- `connecting`
+- `connected`
+- `subscribing`
+- `ready`
+- `stale`
+- `reconnecting`
+- `error`
+
 ### Status shape
 
 `BluetoothConnectionStatus` exposes at minimum:
@@ -46,6 +61,12 @@ Runtime command bridge uses `data/runtime_settings.json` keys:
 
 - Runtime publishes status in `logs/state.json` under `connection`.
 - Fields are additive and backward-compatible for existing consumers.
+- Existing consumers continue to receive legacy connection keys:
+	- `state`
+	- `since_ms`
+	- `last_error`
+	- `reason`
+	- `timeout_streak`
 
 ## Lifecycle Event Contract
 
@@ -61,6 +82,10 @@ Supervisor emits lifecycle transitions through telemetry events:
 - `state`
 - `desired_connected`
 - `event` (lifecycle event name)
+- Legacy consumer compatibility fields remain valid when present:
+	- `reason`
+	- `error`
+	- `timeout_streak`
 
 ### Optional payload fields
 
@@ -92,3 +117,9 @@ Rules:
 - Connect/scan failures update status to `error` with actionable `last_error` text.
 - Stale telemetry transitions to `stale` and optionally reconnects based on config.
 - Shutdown always releases active adapter connection and terminates supervisor loop.
+
+## Finalized Behavioral Guarantees
+
+- Manual disconnect sets desired-connected false and suppresses auto-reconnect until explicit connect/retry.
+- Unexpected disconnect while desired-connected true transitions to reconnecting and follows bounded backoff.
+- Simulator mode and Bluetooth lifecycle controls remain independent (no implicit cross-mutation).

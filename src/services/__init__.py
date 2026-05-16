@@ -6,6 +6,8 @@ can ``from src.services import RaceServiceError, RaceNotFoundError``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from .live_continuity import (
     ActiveCarDetector,
     CarSlotMapping,
@@ -13,6 +15,41 @@ from .live_continuity import (
     LinkHealthTracker,
     LiveContinuityService,
 )
+
+if TYPE_CHECKING:
+    from .bluetooth_connection_supervisor import BluetoothConnectionSupervisor
+    from .bluetooth_service import BluetoothService
+    from .runtime_settings import RuntimeSettings
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy bluetooth exports to avoid import cycles in core runtime modules."""
+
+    if name == "BluetoothConnectionSupervisor":
+        from .bluetooth_connection_supervisor import BluetoothConnectionSupervisor
+
+        return BluetoothConnectionSupervisor
+    if name == "BluetoothService":
+        from .bluetooth_service import BluetoothService
+
+        return BluetoothService
+    if name == "RuntimeSettings":
+        from .runtime_settings import RuntimeSettings
+
+        return RuntimeSettings
+    if name == "get_bluetooth_desired_connected":
+        from .runtime_settings import get_bluetooth_desired_connected
+
+        return get_bluetooth_desired_connected
+    if name == "request_bluetooth_command":
+        from .runtime_settings import request_bluetooth_command
+
+        return request_bluetooth_command
+    if name == "set_bluetooth_desired_connected":
+        from .runtime_settings import set_bluetooth_desired_connected
+
+        return set_bluetooth_desired_connected
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class RaceServiceError(Exception):
@@ -53,6 +90,8 @@ def ensure_database_initialized() -> None:
 
 __all__ = [
     "ActiveCarDetector",
+    "BluetoothConnectionSupervisor",
+    "BluetoothService",
     "CarSlotMapping",
     "InvalidRaceStateError",
     "LinkHealthState",
@@ -63,5 +102,9 @@ __all__ = [
     "RaceNotFoundError",
     "RaceServiceError",
     "RaceValidationError",
+    "RuntimeSettings",
     "ensure_database_initialized",
+    "get_bluetooth_desired_connected",
+    "request_bluetooth_command",
+    "set_bluetooth_desired_connected",
 ]

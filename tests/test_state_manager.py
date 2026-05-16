@@ -176,3 +176,52 @@ def test_connection_snapshot_includes_supervisor_fields(tmp_path: Path):
     assert conn["device_name"] == "Control_Unit"
     assert conn["last_rx_monotonic_ms"] == 12345
     assert conn["reconnect_attempts"] == 2
+
+
+def test_connection_snapshot_preserves_legacy_fields(tmp_path: Path):
+    mgr = _make_mgr(tmp_path)
+    mgr.apply(
+        _ev(
+            EventType.CONNECTION_STATE,
+            payload={
+                "state": "reconnecting",
+                "error": "lost",
+                "reason": "adapter_read_error",
+                "timeout_streak": 4,
+            },
+            ts_ms=777,
+        )
+    )
+
+    conn = mgr.snapshot()["connection"]
+    assert conn["state"] == "reconnecting"
+    assert conn["since_ms"] == 777
+    assert conn["last_error"] == "lost"
+    assert conn["reason"] == "adapter_read_error"
+    assert conn["timeout_streak"] == 4
+
+
+def test_connection_status_visibility_within_one_second(tmp_path: Path):
+    clock = {"ms": 0}
+    mgr = _make_mgr(tmp_path, monotonic_clock=lambda: int(clock["ms"]))
+
+    event_ts = 1000
+    mgr.apply(
+        _ev(
+            EventType.CONNECTION_STATE,
+            payload={
+                "event": "bluetooth_ready",
+                "state": "ready",
+                "desired_connected": True,
+                "error": None,
+            },
+            ts_ms=event_ts,
+        )
+    )
+
+    clock["ms"] = 1800
+    snap = mgr.snapshot()
+    assert snap["connection"]["state"] == "ready"
+    assert snap["connection"]["since_ms"] == event_ts
+    latency_ms = int(snap["taken_at_monotonic_ms"]) - int(event_ts)
+    assert latency_ms <= 1000

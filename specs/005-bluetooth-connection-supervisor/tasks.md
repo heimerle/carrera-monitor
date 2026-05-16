@@ -11,11 +11,11 @@
 
 **Purpose**: Establish shared Bluetooth lifecycle primitives and configuration baseline.
 
-- [ ] T001 Align Bluetooth configuration defaults and validation constraints in src/config.py and config.example.yaml
-- [ ] T002 [P] Create canonical Bluetooth state vocabulary in src/state/bluetooth_state.py
-- [ ] T003 [P] Create Bluetooth status/device schema models in src/schemas/bluetooth_schema.py
-- [ ] T004 [P] Extend runtime settings defaults and command helpers for Bluetooth IPC in src/services/runtime_settings.py
-- [ ] T005 [P] Export Bluetooth modules for stable imports in src/state/__init__.py and src/schemas/__init__.py and src/services/__init__.py
+- [X] T001 Align Bluetooth configuration defaults and validation constraints in src/config.py and config.example.yaml
+- [X] T002 [P] Create canonical Bluetooth state vocabulary in src/state/bluetooth_state.py
+- [X] T003 [P] Create Bluetooth status/device schema models in src/schemas/bluetooth_schema.py
+- [X] T004 [P] Extend runtime settings defaults and command helpers for Bluetooth IPC in src/services/runtime_settings.py
+- [X] T005 [P] Export Bluetooth modules for stable imports in src/state/__init__.py and src/schemas/__init__.py and src/services/__init__.py
 
 ---
 
@@ -25,14 +25,14 @@
 
 **Critical**: User story work starts only after this phase is complete.
 
-- [ ] T006 Implement supervisor run loop and desired-state convergence in src/services/bluetooth_connection_supervisor.py
-- [ ] T007 [P] Implement runtime command-sequence consume/dedupe logic in src/services/bluetooth_connection_supervisor.py
-- [ ] T008 [P] Implement bounded reconnect backoff policy and delay cap handling in src/services/bluetooth_connection_supervisor.py
-- [ ] T009 [P] Implement stale telemetry detection and optional reconnect-on-stale behavior in src/services/bluetooth_connection_supervisor.py
-- [ ] T010 Implement normalized lifecycle event payload emission in src/services/bluetooth_connection_supervisor.py and src/event_model.py
-- [ ] T011 [P] Integrate enriched Bluetooth connection snapshot aggregation in src/state_manager.py
-- [ ] T012 [P] Integrate supervisor startup/shutdown wiring in live runtime path in src/main.py
-- [ ] T013 Implement Bluetooth service facade for runtime and UI proxy modes in src/services/bluetooth_service.py
+- [X] T006 Implement supervisor run loop and desired-state convergence in src/services/bluetooth_connection_supervisor.py
+- [X] T007 [P] Implement runtime command-sequence consume/dedupe logic in src/services/bluetooth_connection_supervisor.py
+- [X] T008 [P] Implement bounded reconnect backoff policy and delay cap handling in src/services/bluetooth_connection_supervisor.py
+- [X] T009 [P] Implement stale telemetry detection and optional reconnect-on-stale behavior in src/services/bluetooth_connection_supervisor.py
+- [X] T010 Implement normalized lifecycle event payload emission in src/services/bluetooth_connection_supervisor.py and src/event_model.py
+- [X] T011 [P] Integrate enriched Bluetooth connection snapshot aggregation in src/state_manager.py
+- [X] T012 [P] Integrate supervisor startup/shutdown wiring in live runtime path in src/main.py
+- [X] T013 Implement Bluetooth service facade for runtime and UI proxy modes in src/services/bluetooth_service.py
 
 **Checkpoint**: Runtime supervision, lifecycle events, and snapshot propagation are available for story-level features.
 
@@ -46,17 +46,17 @@
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Add unexpected disconnect and reconnect transition tests in tests/test_bluetooth_connection_supervisor.py
-- [ ] T015 [P] [US1] Add reconnect backoff cap and reset-on-success tests in tests/test_bluetooth_connection_supervisor.py
-- [ ] T016 [P] [US1] Add stale-timeout and reconnect-on-stale tests in tests/test_bluetooth_connection_supervisor.py
-- [ ] T017 [P] [US1] Add manual disconnect suppression and retry re-enable tests in tests/test_bluetooth_connection_supervisor.py
+- [X] T014 [P] [US1] Add unexpected disconnect and reconnect transition tests in tests/test_bluetooth_connection_supervisor.py
+- [X] T015 [P] [US1] Add reconnect backoff cap and reset-on-success tests in tests/test_bluetooth_connection_supervisor.py
+- [X] T016 [P] [US1] Add stale-timeout and reconnect-on-stale tests in tests/test_bluetooth_connection_supervisor.py
+- [X] T017 [P] [US1] Add manual disconnect suppression and retry re-enable tests in tests/test_bluetooth_connection_supervisor.py
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implement unexpected disconnect recovery path and state transitions in src/services/bluetooth_connection_supervisor.py
-- [ ] T019 [US1] Implement explicit manual disconnect state behavior in src/services/bluetooth_connection_supervisor.py
-- [ ] T020 [US1] Emit reconnect/stale/error lifecycle events with reason metadata in src/services/bluetooth_connection_supervisor.py and src/event_model.py
-- [ ] T021 [US1] Persist reconnect attempts and telemetry freshness metadata to snapshots in src/state_manager.py
+- [X] T018 [US1] Implement unexpected disconnect recovery path and state transitions in src/services/bluetooth_connection_supervisor.py
+- [X] T019 [US1] Implement explicit manual disconnect state behavior in src/services/bluetooth_connection_supervisor.py
+- [X] T020 [US1] Emit reconnect/stale/error lifecycle events with reason metadata in src/services/bluetooth_connection_supervisor.py and src/event_model.py
+- [X] T021 [US1] Persist reconnect attempts and telemetry freshness metadata to snapshots in src/state_manager.py
 
 **Checkpoint**: Runtime reconnect reliability behaviors are independently testable and meet US1 acceptance criteria.
 
@@ -70,18 +70,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] Add Bluetooth control action request tests in tests/test_bluetooth_service.py
-- [ ] T023 [P] [US2] Add button disabled-state and retry visibility tests in tests/test_bluetooth_service.py
-- [ ] T024 [P] [US2] Add enriched lifecycle payload validation tests in tests/test_event_model.py
-- [ ] T025 [P] [US2] Add connection snapshot field coverage tests in tests/test_state_manager.py
+- [X] T022 [P] [US2] Add Bluetooth control action request tests in tests/test_bluetooth_service.py
+- [X] T023 [P] [US2] Add button disabled-state and retry visibility tests in tests/test_bluetooth_service.py
+- [X] T024 [P] [US2] Add enriched lifecycle payload validation tests in tests/test_event_model.py
+- [X] T025 [P] [US2] Add connection snapshot field coverage tests in tests/test_state_manager.py
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Implement connect/disconnect/scan/retry control panel interactions in src/pages/settings.py
-- [ ] T027 [US2] Implement selected-device and desired-state request persistence in src/services/runtime_settings.py and src/pages/settings.py
-- [ ] T028 [US2] Implement dashboard Bluetooth status badges (state, desired state, device, retries, last seen, error) in src/dashboard.py
-- [ ] T029 [US2] Implement service-level control policy and status translation in src/services/bluetooth_service.py
-- [ ] T030 [US2] Wire live runtime adapter ownership to supervisor interface in src/main.py
+- [X] T026 [US2] Implement connect/disconnect/scan/retry control panel interactions in src/pages/settings.py
+- [X] T027 [US2] Implement selected-device and desired-state request persistence in src/services/runtime_settings.py and src/pages/settings.py
+- [X] T028 [US2] Implement dashboard Bluetooth status badges (state, desired state, device, retries, last seen, error) in src/dashboard.py
+- [X] T029 [US2] Implement service-level control policy and status translation in src/services/bluetooth_service.py
+- [X] T030 [US2] Wire live runtime adapter ownership to supervisor interface in src/main.py
 
 **Checkpoint**: Dashboard Bluetooth controls and status views are independently testable and satisfy US2 acceptance criteria.
 
@@ -95,14 +95,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] Add simulator-mode independence tests for Bluetooth actions in tests/test_bluetooth_service.py
-- [ ] T032 [P] [US3] Add mock-mode precedence regression tests in tests/test_main_adapter_selection.py
+- [X] T031 [P] [US3] Add simulator-mode independence tests for Bluetooth actions in tests/test_bluetooth_service.py
+- [X] T032 [P] [US3] Add mock-mode precedence regression tests in tests/test_main_adapter_selection.py
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Implement simulator warning helper and coexistence rules in src/services/bluetooth_service.py
-- [ ] T034 [US3] Apply simulator coexistence messaging and UX safeguards in src/pages/settings.py
-- [ ] T035 [US3] Enforce separation of mock-mode and Bluetooth command state in src/services/runtime_settings.py and src/main.py
+- [X] T033 [US3] Implement simulator warning helper and coexistence rules in src/services/bluetooth_service.py
+- [X] T034 [US3] Apply simulator coexistence messaging and UX safeguards in src/pages/settings.py
+- [X] T035 [US3] Enforce separation of mock-mode and Bluetooth command state in src/services/runtime_settings.py and src/main.py
 
 **Checkpoint**: Simulator coexistence requirements are independently testable and satisfy US3 acceptance criteria.
 
@@ -112,14 +112,14 @@
 
 **Purpose**: Finalize docs, verification, and release hygiene across stories.
 
-- [ ] T036 [P] Update supervisor lifecycle documentation for operators in README.md and specs/005-bluetooth-connection-supervisor/quickstart.md
-- [ ] T037 [P] Finalize lifecycle contract details after implementation in specs/005-bluetooth-connection-supervisor/contracts/bluetooth-supervisor-lifecycle.md
-- [ ] T038 Run full quality gates and record verification outcomes in specs/005-bluetooth-connection-supervisor/quickstart.md
-- [ ] T039 Verify runtime settings tracking exclusion remains correct in .gitignore and data/runtime_settings.json
-- [ ] T040 Add backward-compatibility regression checks for legacy connection snapshot/event fields in tests/test_event_model.py and tests/test_state_manager.py
-- [ ] T041 Execute 20 induced disconnect trials and record >=95% ready-state recovery evidence in specs/005-bluetooth-connection-supervisor/quickstart.md
-- [ ] T042 Add and verify <=1s status visibility latency assertion from lifecycle transition to snapshot update in tests/test_state_manager.py
-- [ ] T043 Commit, push, and verify CI matrix status defined in .github/workflows/ci.yml
+- [X] T036 [P] Update supervisor lifecycle documentation for operators in README.md and specs/005-bluetooth-connection-supervisor/quickstart.md
+- [X] T037 [P] Finalize lifecycle contract details after implementation in specs/005-bluetooth-connection-supervisor/contracts/bluetooth-supervisor-lifecycle.md
+- [X] T038 Run full quality gates and record verification outcomes in specs/005-bluetooth-connection-supervisor/quickstart.md
+- [X] T039 Verify runtime settings tracking exclusion remains correct in .gitignore and data/runtime_settings.json
+- [X] T040 Add backward-compatibility regression checks for legacy connection snapshot/event fields in tests/test_event_model.py and tests/test_state_manager.py
+- [X] T041 Execute 20 induced disconnect trials and record >=95% ready-state recovery evidence in specs/005-bluetooth-connection-supervisor/quickstart.md
+- [X] T042 Add and verify <=1s status visibility latency assertion from lifecycle transition to snapshot update in tests/test_state_manager.py
+- [X] T043 Commit, push, and verify CI matrix status defined in .github/workflows/ci.yml
 
 ---
 
@@ -198,7 +198,7 @@ Task: "T032 [US3] mock-mode precedence regression tests in tests/test_main_adapt
 
 ## Validation
 
-- All tasks follow strict checklist format: `- [ ] T### [P?] [US?] Description with file path`.
+- All tasks follow strict checklist format: `- [X] T### [P?] [US?] Description with file path`.
 - Setup, Foundational, and Polish tasks intentionally omit user-story labels.
 - Story-phase tasks are labeled with `[US1]`, `[US2]`, or `[US3]`.
 - Every task references concrete repository file paths.
