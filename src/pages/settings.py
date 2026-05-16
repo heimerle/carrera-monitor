@@ -12,14 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src.services.runtime_settings import RuntimeSettings
-
-
-def _get_settings() -> RuntimeSettings:
-    if "runtime_settings" not in st.session_state:
-        st.session_state["runtime_settings"] = RuntimeSettings()
-    rs: RuntimeSettings = st.session_state["runtime_settings"]
-    return rs
+from src.services.runtime_settings import DEFAULT_PATH, get_mock_mode, set_mock_mode
 
 
 def _render_mock_mode_toggle() -> None:
@@ -28,8 +21,7 @@ def _render_mock_mode_toggle() -> None:
         "Switch the telemetry source between the in-process mock generator "
         "and the live Carrera AppConnect BLE adapter."
     )
-    rs = _get_settings()
-    current = rs.get_mock_mode()
+    current = get_mock_mode()
     new_value = st.toggle(
         "Mock mode (race simulator)",
         value=current,
@@ -40,18 +32,18 @@ def _render_mock_mode_toggle() -> None:
     )
     if new_value != current:
         try:
-            rs.set_mock_mode(new_value)
+            set_mock_mode(new_value)
             st.success(
                 f"Mock mode {'ENABLED' if new_value else 'DISABLED'}. "
                 "Restart the carrera-monitor process to apply."
             )
         except OSError as exc:
             st.error(f"Failed to persist setting: {exc}")
-    state_label = "ON" if rs.get_mock_mode() else "OFF"
+    state_label = "ON" if get_mock_mode() else "OFF"
     st.info(
         f"Current persistent setting: **{state_label}** "
-        f"(file: `{rs.path}`). The running pipeline applies the value at "
-        "process start; an explicit `--mock` or `--mac` CLI flag still "
+        f"(file: `{DEFAULT_PATH}`). The running pipeline applies the value "
+        "at process start; an explicit `--mock` or `--mac` CLI flag still "
         "overrides this setting."
     )
 
