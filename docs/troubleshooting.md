@@ -8,16 +8,39 @@ The default install only pulls dependencies needed for **mock mode**.
 For live mode install the upstream library in your virtualenv:
 
 ```bash
+pip install -e .[live]
+# or:
 pip install carreralib
 ```
 
-(Or use the `live` install extra if your package config provides one.)
+This also pulls `bleak` (BLE backend, transitively `pyobjc-*` on macOS)
+and `pyserial` (for direct-USB Carrera Control Units).
 
-## "LiveCarreraAdapter wiring is not yet hardware-verified"
+## Discovering your Control Unit's address
 
-The live adapter is currently a stub guarded behind research item **R-001**.
-Run with `--mock` until the hardware integration is closed and this guard
-is removed.
+Run a one-shot scan and exit:
+
+```bash
+python -m src.main --scan
+```
+
+Sample output on macOS (the address is a CoreBluetooth UUID, not a real
+MAC):
+
+```
+Scanning for Carrera Control Units (this may take a few seconds)...
+Found 1 device(s):
+  EA20D98C-3B4E-2B7C-AB40-CFAC35F05AD6      Control_Unit
+
+To use the first Control Unit, run: carrera-monitor --mac <address>
+```
+
+Pass that address back via `--mac`, or write it to `config.yaml`:
+
+```yaml
+bluetooth:
+  mac_address: EA20D98C-3B4E-2B7C-AB40-CFAC35F05AD6
+```
 
 ## Bluetooth scan finds nothing
 

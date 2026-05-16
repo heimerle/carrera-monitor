@@ -25,3 +25,4 @@ data/*.sqlite3-*
 # Build artifacts
 *.egg-info/
 .eggs/
+carreralib.log
