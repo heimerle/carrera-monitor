@@ -130,7 +130,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 - **FR-131**: System MUST place SQLAlchemy session management in `src/database.py` and ORM models in `src/models.py`.
 - **FR-132**: System MUST provide Pydantic DTOs for race configuration and report payloads in `src/schemas/race_schema.py`.
 - **FR-133**: System MUST place repository code (queries) in `src/repositories/race_repository.py` and business logic in `src/services/race_service.py` and `src/services/reporting_service.py`.
-- **FR-134**: System MUST NOT break or regress any existing test in `tests/`. The 52 pre-feature MVP tests MUST remain green; this feature added ≥ 56 new tests on top. The absolute total drifts as later features land and is not pinned here — see CI on `main` for the current number.
+- **FR-134**: System MUST NOT break or regress any existing test in `tests/`. The 52 pre-feature MVP tests MUST remain green; this feature added the eight new tests listed in §10 of the request (plus follow-on tests as the slice evolved). The absolute total drifts as later features land and is not pinned here — see CI on `main` for the current number.
 - **FR-135**: Carrera-telemetry event mappings that depend on real hardware MUST be marked with `# TODO(hardware): …` comments where they cross the live `carreralib` boundary (consistent with the existing R-001 rule).
 - **FR-136**: On application startup, if exactly one race has status `running` or `paused` and `race_management.recover_on_startup = true`, the system MUST re-bind that race to the `ActiveRaceContext` singleton so telemetry ingest resumes against it without manual intervention.
 

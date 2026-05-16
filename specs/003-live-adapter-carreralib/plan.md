@@ -74,8 +74,8 @@ specs/003-live-adapter-carreralib/
 src/
 ├── carrera_client.py            # LiveCarreraAdapter + CarreraClientRunner (PRs #9/#10/#12/#14)
 ├── main.py                      # CLI entry; --scan short-circuit (PR #9)
-├── carrera_mock.py              # Mock adapter (unchanged by this slice)
-├── telemetry.py                 # TelemetryEvent schema (consumed, not modified)
+├── mock_client.py               # Mock adapter (unchanged by this slice)
+├── event_model.py               # TelemetryEvent schema (consumed, not modified)
 └── … (db, dashboard, race controls, etc.)
 
 tests/
