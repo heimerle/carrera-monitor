@@ -13,12 +13,12 @@ A race operator needs the Bluetooth link to recover automatically from transient
 
 **Why this priority**: Link instability during a race can interrupt race visibility and operator trust. Automatic recovery is the core value of this feature.
 
-**Independent Test**: Start in connected state, induce an unexpected disconnect, and verify the system transitions to reconnecting and returns to a usable connected state without restarting the application.
+**Independent Test**: Start in connected state, induce an unexpected disconnect, and verify the system transitions to reconnecting and returns to `ready` (the feature definition of usable connected state) without restarting the application.
 
 **Acceptance Scenarios**:
 
 1. **Given** the desired connection state is connected, **When** the transport drops unexpectedly, **Then** the system transitions to reconnecting and retries automatically using a bounded retry policy.
-2. **Given** reconnect succeeds, **When** telemetry resumes, **Then** the connection state returns to a usable connected state and clears prior transient error condition.
+2. **Given** reconnect succeeds, **When** telemetry resumes, **Then** the connection state returns to `ready` and clears prior transient error condition.
 3. **Given** reconnect keeps failing, **When** maximum retry delay is reached, **Then** retries continue at that cap and status remains observable to the operator.
 
 ---
@@ -80,7 +80,7 @@ A team member using simulator mode needs Bluetooth lifecycle actions to remain i
 - **FR-013**: System MUST ensure dashboard Bluetooth actions do not mutate simulator mode state.
 - **FR-014**: System MUST ensure simulator mode changes do not implicitly change Bluetooth desired state.
 - **FR-015**: System MUST shutdown Bluetooth lifecycle operations cleanly and release active connections during process stop.
-- **FR-016**: System MUST preserve backward-compatible behavior for existing telemetry consumers that rely on connection status updates.
+- **FR-016**: System MUST preserve backward-compatible behavior for existing telemetry consumers by retaining `connection_state` event type and existing snapshot fields (`state`, `since_ms`, `last_error`, `reason`, `timeout_streak`) while allowing additive fields.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -93,14 +93,15 @@ A team member using simulator mode needs Bluetooth lifecycle actions to remain i
 
 ### Measurable Outcomes
 
-- **SC-001**: In at least 95% of induced transient disconnect trials, the system re-enters a usable connected state without process restart.
-- **SC-002**: Manual disconnect prevents automatic reconnect attempts for the full observation window until an explicit user reconnect action occurs.
+- **SC-001**: In at least 19 of 20 induced transient disconnect trials (>=95%), the system re-enters `ready` without process restart.
+- **SC-002**: Manual disconnect prevents automatic reconnect attempts for a 10-minute observation window until an explicit user reconnect action occurs.
 - **SC-003**: Dashboard status reflects lifecycle transitions and key metadata updates within 1 second of each transition.
 - **SC-004**: Operators can complete connect, disconnect, scan, and retry actions from the dashboard without terminal interaction in all scripted acceptance scenarios.
 - **SC-005**: In simulator-enabled acceptance scenarios, Bluetooth actions produce zero unintended simulator mode state changes.
 
 ## Assumptions
 
+- For this feature, "usable connected state" is defined as lifecycle state `ready`.
 - The feature targets one active Bluetooth connection session at a time per runtime process.
 - Operators have sufficient platform permissions to use local Bluetooth hardware.
 - Existing runtime settings persistence is available and writable under normal operation.

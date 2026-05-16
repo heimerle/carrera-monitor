@@ -116,7 +116,10 @@
 - [ ] T037 [P] Finalize lifecycle contract details after implementation in specs/005-bluetooth-connection-supervisor/contracts/bluetooth-supervisor-lifecycle.md
 - [ ] T038 Run full quality gates and record verification outcomes in specs/005-bluetooth-connection-supervisor/quickstart.md
 - [ ] T039 Verify runtime settings tracking exclusion remains correct in .gitignore and data/runtime_settings.json
-- [ ] T040 Commit, push, and verify CI matrix status defined in .github/workflows/ci.yml
+- [ ] T040 Add backward-compatibility regression checks for legacy connection snapshot/event fields in tests/test_event_model.py and tests/test_state_manager.py
+- [ ] T041 Execute 20 induced disconnect trials and record >=95% ready-state recovery evidence in specs/005-bluetooth-connection-supervisor/quickstart.md
+- [ ] T042 Add and verify <=1s status visibility latency assertion from lifecycle transition to snapshot update in tests/test_state_manager.py
+- [ ] T043 Commit, push, and verify CI matrix status defined in .github/workflows/ci.yml
 
 ---
 
@@ -148,7 +151,7 @@
 - US1 tests: T014-T017 can run in parallel.
 - US2 tests: T022-T025 can run in parallel.
 - US3 tests: T031-T032 can run in parallel.
-- Polish: T036-T037 can run in parallel.
+- Polish: T036-T037 and T040-T042 can run in parallel.
 
 ## Parallel Example: User Story 1
 
