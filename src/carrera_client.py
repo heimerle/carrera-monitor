@@ -376,22 +376,52 @@ class LiveCarreraAdapter:
 
     async def _read_loop(self) -> None:
         # Re-import inside the loop so the isinstance discriminators are
-        # bound to the same classes carreralib actually returns.
+        # bound to the same classes carreralib actually returns. We also
+        # import carreralib's own TimeoutError, which is NOT the same
+        # class as Python's built-in TimeoutError — recv() raises this
+        # on every idle BLE second.
         from carreralib import ControlUnit
+        from carreralib.connection import TimeoutError as CLTimeoutError
 
         cu = self._cu
         prev_data: Any = None
+        poll_count = 0
+        timeout_streak = 0
         try:
             while self._connected:
                 try:
                     data = await asyncio.to_thread(cu.poll)
-                except TimeoutError:
+                except (CLTimeoutError, TimeoutError):
                     # No CU traffic within the poll timeout; keep looping.
+                    # A long streak almost always means the AppConnect
+                    # accepted the BLE link but stopped forwarding CU
+                    # traffic (stale/competing session — power-cycle the
+                    # AppConnect or close other BLE apps).
+                    timeout_streak += 1
+                    if timeout_streak in (5, 30, 120) or timeout_streak % 600 == 0:
+                        logger.warning(
+                            "live: %d consecutive CU poll timeouts — "
+                            "AppConnect may have stopped forwarding "
+                            "(try power-cycling it or closing other BLE apps)",
+                            timeout_streak,
+                        )
                     continue
                 except Exception as exc:  # pragma: no cover - hardware path
                     raise AdapterReadError(
                         f"Control Unit poll failed: {exc}"
                     ) from exc
+
+                if timeout_streak:
+                    logger.info(
+                        "live: CU poll recovered after %d timeouts",
+                        timeout_streak,
+                    )
+                    timeout_streak = 0
+                poll_count += 1
+                if poll_count <= 3 or poll_count % 200 == 0:
+                    logger.info(
+                        "live: poll #%d → %s", poll_count, type(data).__name__
+                    )
 
                 # De-dupe identical consecutive frames; matches the
                 # carreralib reference demo to avoid double-counting laps
