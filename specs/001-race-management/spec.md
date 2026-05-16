@@ -130,7 +130,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 - **FR-131**: System MUST place SQLAlchemy session management in `src/database.py` and ORM models in `src/models.py`.
 - **FR-132**: System MUST provide Pydantic DTOs for race configuration and report payloads in `src/schemas/race_schema.py`.
 - **FR-133**: System MUST place repository code (queries) in `src/repositories/race_repository.py` and business logic in `src/services/race_service.py` and `src/services/reporting_service.py`.
-- **FR-134**: System MUST NOT break or regress any existing test in `tests/` (the 52 pre-feature MVP tests MUST remain passing; the feature added 56 new tests, for a current total of 108 passing tests).
+- **FR-134**: System MUST NOT break or regress any existing test in `tests/`. The 52 pre-feature MVP tests MUST remain green; this feature added ≥ 56 new tests on top. The absolute total drifts as later features land and is not pinned here — see CI on `main` for the current number.
 - **FR-135**: Carrera-telemetry event mappings that depend on real hardware MUST be marked with `# TODO(hardware): …` comments where they cross the live `carreralib` boundary (consistent with the existing R-001 rule).
 - **FR-136**: On application startup, if exactly one race has status `running` or `paused` and `race_management.recover_on_startup = true`, the system MUST re-bind that race to the `ActiveRaceContext` singleton so telemetry ingest resumes against it without manual intervention.
 
@@ -150,7 +150,7 @@ A user opens the Race Reports page for a finished race and sees: race metadata, 
 - **SC-101**: A user can create a fixed-laps race with 3 drivers, run it through 10 simulated laps with mock telemetry, and finish it — end-to-end in under 3 minutes from a fresh checkout.
 - **SC-102**: 100% of `lap` events emitted by `MockCarreraAdapter` while a race is `running` and whose `car_id` is within the active driver set produce exactly one `RaceLap` row (no duplicates, no drops).
 - **SC-103**: A repeated race contains zero rows in `race_laps`, `race_events`, and `race_reports`, and the same configuration + driver names as its source (verified by a dedicated test).
-- **SC-104**: The 52 pre-feature MVP tests remain green; new race-management tests (≥ the eight listed in §10 of the request) all pass on the same CI matrix. (Current total: 108 passing on Python 3.11 + 3.12 × ubuntu/macos.)
+- **SC-104**: The 52 pre-feature MVP tests remain green; new race-management tests (≥ the eight listed in §10 of the request) all pass on the same CI matrix (Python 3.11 + 3.12 × ubuntu/macos). The absolute suite size is not pinned here — see CI for the current total.
 - **SC-105**: Generating a race-summary report for a finished race takes < 500 ms wall time for sessions up to 1,000 lap rows.
 - **SC-106**: Telemetry pipeline performance (FR-022 of MVP: ~60 events/s, <50 ms p95 ingest-to-disk) remains unaffected — measured by re-running the existing storage benchmark with race persistence enabled.
 - **SC-107**: A database write error during `record_lap()` does not crash the pipeline; verified by a fault-injection test.

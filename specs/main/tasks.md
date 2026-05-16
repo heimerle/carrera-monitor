@@ -203,3 +203,9 @@ pytest tests/test_event_model.py          # baseline
 ## Current Status (2026-05-15)
 
 All 39 tasks complete; CI green on Ubuntu + macOS × Python 3.11 / 3.12. Latest commit on `main`: post-MVP dashboard polish (motorsport leaderboard, lap times in seconds with 3 decimals, smoother refresh interval bounds 100–2000 ms with 200 ms default) — applied directly to `src/dashboard.py` and `src/config.py`, no new tasks generated for that slice.
+
+For work that landed on `main` after this date see the follow-on feature slices:
+
+- `specs/001-race-management/` — race management (PR #1, T001–T044 + T043a).
+- `specs/002-race-controls/` — race controls + `RuntimeSettings` refactor (PR #5/#6/#13, T001–T036).
+- pending `specs/003-live-adapter-carreralib/` — retroactive slice for the carreralib live-adapter stack (PR #9 carreralib rewrite + `--scan` CLI, PR #10 TimeoutError handling, PR #12 BLE idle watchdog, PR #14 reader-task-failure propagation + `cu.reset` suppression on reconnect + exponential backoff).
