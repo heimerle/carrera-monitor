@@ -70,4 +70,5 @@ Expected result:
 Latest implementation run result:
 - `ruff check .` -> `All checks passed!`
 - `mypy src` -> `Success: no issues found in 36 source files`
-- `pytest` -> `209 passed in 13.58s`
+- `pytest` -> `210 passed in 13.75s`
+- SC-004 evidence -> `tests/test_state_manager.py::test_connection_status_visibility_within_one_second` passed (`latency_ms <= 1000`)
