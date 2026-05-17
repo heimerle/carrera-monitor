@@ -305,3 +305,27 @@ async def test_lifecycle_events_include_named_connection_events(tmp_path: Path) 
     assert "bluetooth_connecting" in lifecycle_events
     assert "bluetooth_ready" in lifecycle_events
     assert "bluetooth_manual_disconnect" in lifecycle_events
+
+
+@pytest.mark.asyncio
+async def test_startup_ignores_stale_persisted_command(tmp_path: Path) -> None:
+    adapter = _ScriptedAdapter()
+    runtime = _make_runtime(tmp_path)
+    runtime.request_bluetooth_command("disconnect")
+
+    supervisor = BluetoothConnectionSupervisor(
+        config=_make_cfg(),
+        runtime_settings=runtime,
+        adapter_factory=lambda: adapter,
+    )
+
+    await supervisor.connect(None)
+    await _wait_until(lambda: supervisor.get_status().state is BluetoothState.READY)
+    await asyncio.sleep(0.05)
+
+    status = supervisor.get_status()
+    assert status.state is BluetoothState.READY
+    assert status.desired_connected is True
+    assert adapter.connect_calls == 1
+
+    await supervisor.shutdown()

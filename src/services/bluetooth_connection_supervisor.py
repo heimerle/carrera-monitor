@@ -80,7 +80,9 @@ class BluetoothConnectionSupervisor:
         self._adapter: LiveCarreraAdapter | None = None
         self._adapter_iter: AsyncIterator[TelemetryEvent] | None = None
         self._known_devices: list[BluetoothDevice] = []
-        self._last_command_seq = 0
+        # Ignore commands that were persisted by an earlier process instance.
+        # Only commands written after this supervisor starts should be applied.
+        self._last_command_seq = int(self._runtime.as_dict().get("bluetooth_command_seq", 0))
         self._manual_disconnect = False
         self._has_connected_once = False
 
