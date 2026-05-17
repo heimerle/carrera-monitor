@@ -48,3 +48,10 @@
 - Alternatives considered:
   - Repository-only reads: rejected because this can lag behind near-real-time telemetry.
   - Telemetry-only reads: rejected because persisted race metadata is still required for names/status context.
+
+## Decision 8: Apply Clarification A as absolute visibility SLA
+- Decision: Metric updates must be visible on the dashboard no later than 1 second after telemetry ingestion.
+- Rationale: Provides a deterministic acceptance boundary independent of operator interpretation and keeps race-critical data timely.
+- Alternatives considered:
+  - Refresh-cycle-only requirement: rejected because cycle duration can vary by configuration and does not guarantee absolute responsiveness.
+  - max(1s, refresh interval): rejected because it can silently loosen operator expectations when refresh intervals are high.

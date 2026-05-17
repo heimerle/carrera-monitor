@@ -80,15 +80,14 @@ A race operator needs a stable dashboard layout during live operation without no
 - **FR-005**: System MUST always render a race metrics section even when there is no active race, using placeholder values where data is absent.
 - **FR-006**: System MUST display race-level metrics: race name, race status, race mode, elapsed time, and progress.
 - **FR-007**: System MUST display per-car metrics for configured cars: car id, driver name, lap count, latest lap, best lap, average lap, position (if calculable), fuel (if available), pit status (if available).
-- **FR-008**: System MUST display global metrics: total laps, leader, fastest lap overall, and safety-car status.
-- **FR-009**: When safety-car status cannot be derived, system MUST render a visible placeholder for that metric instead of removing the metric field.
-- **FR-010**: System MUST normalize lap event variants (`lap.payload.lap_time_ms` and `lap_completed.payload.time_ms`) into one internal lap update path.
-- **FR-011**: System MUST safely handle missing lap time and unknown car IDs without crashing or removing dashboard sections.
-- **FR-012**: Dashboard metric sourcing MUST follow priority: state snapshot first, repository/race service second, in-memory telemetry fallback third.
-- **FR-013**: System MUST expose a dedicated rendering entry point for race metrics (or equivalent cohesive render function) that is always executed during dashboard refresh.
-- **FR-014**: System MUST provide a collapsed-by-default diagnostics section for race-metric debug signals.
-- **FR-015**: Changes MUST remain targeted to this fix scope and avoid unrelated architecture refactors.
-- **FR-016**: System MUST add/update tests for connection icon-only behavior, race metric rendering with and without active race, lap normalization compatibility, and metric calculations.
+- **FR-008**: System MUST display global metrics: total laps, leader, fastest lap overall, and safety-car status; when safety-car status cannot be derived, the metric MUST remain visible with placeholder value.
+- **FR-009**: System MUST normalize lap event variants (`lap.payload.lap_time_ms` and `lap_completed.payload.time_ms`) into one internal lap update path.
+- **FR-010**: System MUST safely handle missing lap time and unknown car IDs without crashing or removing dashboard sections.
+- **FR-011**: Dashboard metric sourcing MUST follow priority: state snapshot first, repository/race service second, in-memory telemetry fallback third.
+- **FR-012**: System MUST expose a dedicated rendering entry point for race metrics (or equivalent cohesive render function) that is always executed during dashboard refresh.
+- **FR-013**: System MUST provide a collapsed-by-default diagnostics section for race-metric debug signals.
+- **FR-014**: Changes MUST remain targeted to this fix scope and avoid unrelated architecture refactors.
+- **FR-015**: System MUST add/update tests for connection icon-only behavior, race metric rendering with and without active race, lap normalization compatibility, and metric calculations.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -104,7 +103,7 @@ A race operator needs a stable dashboard layout during live operation without no
 - **SC-001**: Main dashboard header shows only one connection status icon and no verbose status text labels.
 - **SC-002**: Detailed Bluetooth status remains accessible in diagnostics/overflow UI.
 - **SC-003**: Race metrics section is always visible on dashboard (active and inactive race scenarios).
-- **SC-004**: For incoming lap telemetry, per-car lap count/latest/best/average and global fastest/leader metrics update correctly within one dashboard refresh cycle and no later than 1 second after event ingestion.
+- **SC-004**: For incoming lap telemetry, per-car lap count/latest/best/average and global fastest/leader metrics update correctly no later than 1 second after event ingestion, independent of configured dashboard refresh interval.
 - **SC-005**: Placeholder values are shown for missing data instead of hidden metric cards.
 - **SC-006**: Safety-car metric is always present in the global metrics row and shows either a concrete state or placeholder value.
 - **SC-007**: Added or updated acceptance and regression tests for this feature pass in the project's standard quality gate suite.

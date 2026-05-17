@@ -22,20 +22,13 @@ Purpose: Dashboard-ready aggregate for race-level and per-car metrics.
 
 Fields:
 - `taken_at_iso: str` - Snapshot timestamp.
-- `race_id: int | null` - Active race identifier.
-- `race_name: str | null` - Active race name.
-- `race_status: str | null` - Domain race status (`running`, `paused`, `idle`, `finished`, etc.).
-- `race_mode: str | null` - Domain race mode.
-- `elapsed_ms: int | null` - Elapsed race time in milliseconds.
-- `progress_percent: float | null` - Progress percentage where calculable.
-- `leader_car_id: int | null` - Current leader if calculable.
-- `fastest_lap_ms: int | null` - Best lap overall.
-- `total_laps: int` - Sum of valid laps across tracked cars.
-- `safety_car_active: bool | null` - Optional safety-car status.
+- `race: RaceSummary` - Canonical race-level metrics object.
 - `cars: list[CarRaceMetrics]` - Fixed-length list for configured cars (canonical ids 1..6).
 - `diagnostics: RaceMetricDiagnostics` - Debug/trace values for collapsed diagnostics panel.
+- `source_priority: SourcePriority` - Flags indicating which hydration layers were used.
 
 Validation Rules:
+- `race` object is always present with stable keys, even when values are null.
 - `cars` must always be present; missing cars are emitted with placeholders/default values.
 - Unknown car IDs outside configured range are ignored.
 - Numeric fields must be non-negative when present.
@@ -43,6 +36,31 @@ Validation Rules:
 State Transitions:
 - Updated every telemetry/state refresh cycle.
 - Maintains stable shape regardless of active-race presence.
+
+## Entity: RaceSummary
+
+Purpose: Race-level metrics rendered in cards and global metrics row.
+
+Fields:
+- `id: int | null` - Active race identifier.
+- `name: str | null` - Active race name.
+- `status: str | null` - Domain race status (`running`, `paused`, `idle`, `finished`, etc.).
+- `mode: str | null` - Domain race mode.
+- `elapsed_ms: int | null` - Elapsed race time in milliseconds.
+- `progress_percent: float | null` - Progress percentage where calculable.
+- `leader_car_id: int | null` - Current leader if calculable.
+- `fastest_lap_ms: int | null` - Best lap overall.
+- `total_laps: int` - Sum of valid laps across tracked cars.
+- `safety_car_active: bool | null` - Safety-car state; null when unavailable.
+
+Validation Rules:
+- `total_laps >= 0`.
+- `progress_percent` in `[0, 100]` when present.
+- `safety_car_active` may be null and maps to UI placeholder behavior.
+
+State Transitions:
+- Recomputed on each snapshot update.
+- May merge values from source-priority fallback when primary fields are absent.
 
 ## Entity: CarRaceMetrics
 
@@ -102,9 +120,23 @@ Validation Rules:
 - Counters are non-negative.
 - Diagnostics may be partial and must never block dashboard rendering.
 
+## Entity: SourcePriority
+
+Purpose: Tracks availability of each metric hydration source.
+
+Fields:
+- `state_snapshot: bool`
+- `repository_fallback: bool`
+- `in_memory_fallback: bool`
+
+Validation Rules:
+- All flags are required booleans for deterministic diagnostics.
+
 ## Relationships
 
+- `RaceDashboardSnapshot` 1-to-1 `RaceSummary`.
 - `RaceDashboardSnapshot` 1-to-many `CarRaceMetrics`.
 - `RaceDashboardSnapshot` 1-to-1 `RaceMetricDiagnostics`.
+- `RaceDashboardSnapshot` 1-to-1 `SourcePriority`.
 - `LapNormalizationInput` feeds updates into one `CarRaceMetrics` record.
 - `ConnectionIndicatorState` is independent from race entities but rendered in the same dashboard frame.

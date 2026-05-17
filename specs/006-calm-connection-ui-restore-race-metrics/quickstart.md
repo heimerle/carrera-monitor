@@ -40,14 +40,21 @@
    - `lap.payload.lap_time_ms`
    - `lap_completed.payload.time_ms`
 4. Confirm both variants update the same car metrics consistently.
+5. Confirm metric updates are visible on the dashboard no later than 1 second after telemetry ingestion.
 
-## 5. Verify Resilience Edge Cases
+## 5. Verify Global Safety-Car Metric
+
+1. Open the global metrics row while no safety-car signal is present.
+2. Confirm safety-car metric remains visible with placeholder value (`-`).
+3. If safety-car status becomes available, confirm value transitions from placeholder to concrete state without layout changes.
+
+## 6. Verify Resilience Edge Cases
 
 1. Emit unknown car IDs and malformed lap payloads.
 2. Confirm dashboard remains stable and continues rendering metrics section.
 3. Confirm diagnostics indicates dropped/ignored lap events without UI breakage.
 
-## 6. Run Quality Gates
+## 7. Run Quality Gates
 
 Run project quality commands:
 1. `ruff check .`
@@ -57,6 +64,8 @@ Run project quality commands:
 Expected result:
 - All checks pass.
 - New/updated tests cover icon-only connection rendering, always-visible metrics section, lap normalization compatibility, and metric calculations.
+- Safety-car metric visibility is preserved with placeholders when unavailable.
+- Metric visibility SLA (<=1 second from ingestion) is met during validation.
 
 Latest implementation run result:
 - `ruff check .` -> `All checks passed!`

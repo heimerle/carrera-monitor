@@ -77,6 +77,7 @@ Rules:
 - `cars` MUST remain present even with no active race.
 - Missing values MUST be represented as `null` (or dashboard placeholder `-` in rendering), not by omitting keys.
 - Unknown car IDs outside configured range MUST be ignored safely.
+- `race.safety_car_active` MUST remain present; when unavailable it MUST be `null` and rendered as placeholder.
 
 ## Contract 3: Lap Normalization Compatibility
 
@@ -117,6 +118,7 @@ Error handling:
 - Race metrics section MUST always render, even with no active race.
 - Placeholder display (`-`) MUST be used for absent values.
 - Diagnostics section MUST be collapsed by default and contain troubleshooting fields from `diagnostics` payload.
+- Telemetry-derived metric updates MUST become visible to operators no later than 1 second after ingestion.
 
 ## Backward Compatibility
 
