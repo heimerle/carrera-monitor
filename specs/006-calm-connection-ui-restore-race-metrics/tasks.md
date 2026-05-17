@@ -11,9 +11,9 @@
 
 **Purpose**: Prepare shared fixtures and test scaffolding used across story phases.
 
-- [X] T001 Create dashboard race-metrics fixture snapshots for no-race and active-race scenarios in tests/fixtures/dashboard_state_no_race.json and tests/fixtures/dashboard_state_active_race.json
-- [X] T002 [P] Add reusable telemetry event fixture builders for lap and lap_completed payload variants in tests/conftest.py
-- [X] T003 [P] Add dashboard metrics regression test module scaffold in tests/test_dashboard_metrics.py
+- [ ] T001 Create dashboard race-metrics fixture snapshots for no-race and active-race scenarios in tests/fixtures/dashboard_state_no_race.json and tests/fixtures/dashboard_state_active_race.json
+- [ ] T002 [P] Add reusable telemetry event fixture builders for lap and lap_completed payload variants in tests/conftest.py
+- [ ] T003 [P] Add dashboard metrics regression test module scaffold in tests/test_dashboard_metrics.py
 
 ---
 
@@ -23,12 +23,12 @@
 
 **Critical**: User story implementation begins only after this phase is complete.
 
-- [X] T004 Implement shared connection-state to indicator mapping helper with deterministic fallback behavior in src/dashboard.py
-- [X] T005 [P] Extend race snapshot aggregation shape to include race-level metrics, per-car metrics, and diagnostics fields in src/state_manager.py
-- [X] T006 [P] Extend canonical event/state compatibility for lap normalization inputs in src/event_model.py
-- [X] T007 [P] Implement unified lap payload normalization helper for lap and lap_completed variants in src/carrera_client.py
-- [X] T008 Implement malformed-lap and unknown-car safe handling with diagnostics counters in src/state_manager.py
-- [X] T009 Implement dashboard metric-source priority resolution (state snapshot, repository/service fallback, in-memory fallback) in src/dashboard.py and src/services/race_service.py
+- [ ] T004 Implement shared connection-state to indicator mapping helper with deterministic fallback behavior in src/dashboard.py
+- [ ] T005 [P] Extend race snapshot aggregation shape to include race-level metrics, per-car metrics, and diagnostics fields in src/state_manager.py
+- [ ] T006 [P] Extend canonical event/state compatibility for lap normalization inputs in src/event_model.py
+- [ ] T007 [P] Implement unified lap payload normalization helper for lap and lap_completed variants in src/carrera_client.py
+- [ ] T008 Implement malformed-lap and unknown-car safe handling with diagnostics counters in src/state_manager.py
+- [ ] T009 Implement dashboard metric-source priority resolution (state snapshot, repository/service fallback, in-memory fallback) in src/dashboard.py and src/services/race_service.py
 
 **Checkpoint**: Core mapping, normalization, and snapshot contracts are stable and ready for independent user story delivery.
 
@@ -42,15 +42,15 @@
 
 ### Tests for User Story 1
 
-- [X] T010 [P] [US1] Add connection indicator icon mapping tests for all required states in tests/test_dashboard_metrics.py
-- [X] T011 [P] [US1] Add header-no-verbose-text regression test in tests/test_dashboard_metrics.py
-- [X] T012 [P] [US1] Add diagnostics-panel detail visibility test for connection metadata in tests/test_dashboard_metrics.py
+- [ ] T010 [P] [US1] Add connection indicator icon mapping tests for all required states in tests/test_dashboard_metrics.py
+- [ ] T011 [P] [US1] Add header-no-verbose-text regression test in tests/test_dashboard_metrics.py
+- [ ] T012 [P] [US1] Add diagnostics-panel detail visibility test for connection metadata in tests/test_dashboard_metrics.py
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] Replace verbose connection header label with icon-only indicator rendering in src/dashboard.py
-- [X] T014 [US1] Move detailed connection fields (state, device, MAC, retries, last seen, error) into diagnostics/overflow rendering in src/dashboard.py
-- [X] T015 [US1] Implement unknown-state fallback indicator behavior and guardrails in src/dashboard.py
+- [ ] T013 [US1] Replace verbose connection header label with icon-only indicator rendering in src/dashboard.py
+- [ ] T014 [US1] Move detailed connection fields (state, device, MAC, retries, last seen, error) into diagnostics/overflow rendering in src/dashboard.py
+- [ ] T015 [US1] Implement unknown-state fallback indicator behavior and guardrails in src/dashboard.py
 
 **Checkpoint**: US1 is complete when header remains calm and icon-only across all connection transitions.
 
@@ -64,18 +64,18 @@
 
 ### Tests for User Story 2
 
-- [X] T016 [P] [US2] Add lap normalization compatibility tests for lap.payload.lap_time_ms and lap_completed.payload.time_ms in tests/test_live_translation.py
-- [X] T017 [P] [US2] Add race snapshot aggregation tests for active and inactive race scenarios in tests/test_state_manager.py
-- [X] T018 [P] [US2] Add per-car metric calculation tests (lap_count, latest, best, average) in tests/test_state_manager.py
-- [X] T019 [P] [US2] Add resilient handling tests for unknown car IDs and missing lap times in tests/test_state_manager.py
+- [ ] T016 [P] [US2] Add lap normalization compatibility tests for lap.payload.lap_time_ms and lap_completed.payload.time_ms in tests/test_live_translation.py
+- [ ] T017 [P] [US2] Add race snapshot aggregation tests for active and inactive race scenarios in tests/test_state_manager.py
+- [ ] T018 [P] [US2] Add per-car metric calculation tests (lap_count, latest, best, average) in tests/test_state_manager.py
+- [ ] T019 [P] [US2] Add resilient handling tests for unknown car IDs and missing lap times in tests/test_state_manager.py
 
 ### Implementation for User Story 2
 
-- [X] T020 [US2] Implement always-visible race metrics section with placeholder rendering for missing values in src/dashboard.py
-- [X] T021 [US2] Implement race-level metric rendering (name, status, mode, elapsed, progress) in src/dashboard.py
-- [X] T022 [US2] Implement per-car and global metrics rendering path (leader, fastest lap, total laps, fuel, pit, speed) in src/dashboard.py
-- [X] T023 [US2] Wire normalized lap updates into unified state update flow for race metrics in src/state_manager.py and src/carrera_client.py
-- [X] T024 [US2] Ensure repository/service fallback hydration for race metadata when snapshot fields are absent in src/dashboard.py and src/services/race_service.py
+- [ ] T020 [US2] Implement always-visible race metrics section with placeholder rendering for missing values in src/dashboard.py
+- [ ] T021 [US2] Implement race-level metric rendering (name, status, mode, elapsed, progress) in src/dashboard.py
+- [ ] T022 [US2] Implement per-car and global metrics rendering path (leader, fastest lap, total laps, fuel, pit, speed) in src/dashboard.py
+- [ ] T023 [US2] Wire normalized lap updates into unified state update flow for race metrics in src/state_manager.py and src/carrera_client.py
+- [ ] T024 [US2] Ensure repository/service fallback hydration for race metadata when snapshot fields are absent in src/dashboard.py and src/services/race_service.py
 
 **Checkpoint**: US2 is complete when race metrics are continuously visible and accurate for both telemetry variants.
 
@@ -89,16 +89,16 @@
 
 ### Tests for User Story 3
 
-- [X] T025 [P] [US3] Add dashboard layout stability regression test across refresh cycles in tests/test_dashboard_metrics.py
-- [X] T026 [P] [US3] Add collapsed-by-default diagnostics panel behavior test in tests/test_dashboard_metrics.py
-- [X] T027 [P] [US3] Add diagnostics payload field coverage test (last telemetry, active race id, lap counters, last payload) in tests/test_dashboard_metrics.py
+- [ ] T025 [P] [US3] Add dashboard layout stability regression test across refresh cycles in tests/test_dashboard_metrics.py
+- [ ] T026 [P] [US3] Add collapsed-by-default diagnostics panel behavior test in tests/test_dashboard_metrics.py
+- [ ] T027 [P] [US3] Add diagnostics payload field coverage test (last telemetry, active race id, lap counters, last payload) in tests/test_dashboard_metrics.py
 
 ### Implementation for User Story 3
 
-- [X] T028 [US3] Refactor race metrics rendering into dedicated always-invoked render entry point in src/dashboard.py
-- [X] T029 [US3] Implement collapsed diagnostics section for race-metric debug context in src/dashboard.py
-- [X] T030 [US3] Propagate race-metric diagnostics fields (timestamps, counters, payload echoes) from state assembly in src/state_manager.py
-- [X] T031 [US3] Remove verbose debug output from primary dashboard layout path in src/dashboard.py
+- [ ] T028 [US3] Refactor race metrics rendering into dedicated always-invoked render entry point in src/dashboard.py
+- [ ] T029 [US3] Implement collapsed diagnostics section for race-metric debug context in src/dashboard.py
+- [ ] T030 [US3] Propagate race-metric diagnostics fields (timestamps, counters, payload echoes) from state assembly in src/state_manager.py
+- [ ] T031 [US3] Remove verbose debug output from primary dashboard layout path in src/dashboard.py
 
 **Checkpoint**: US3 is complete when the main dashboard remains stable and diagnostics stay optional/collapsed.
 
@@ -108,10 +108,10 @@
 
 **Purpose**: Final verification, documentation alignment, and release hygiene.
 
-- [X] T032 [P] Update operator verification steps and expected outcomes for this feature in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
-- [X] T033 [P] Update dashboard behavior notes for icon-only connection and always-visible metrics in README.md
-- [X] T034 Run full quality gates (ruff, mypy, pytest) and record outcomes in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
-- [X] T035 Commit feature changes, push branch, and verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml
+- [ ] T032 [P] Update operator verification steps and expected outcomes for this feature in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
+- [ ] T033 [P] Update dashboard behavior notes for icon-only connection and always-visible metrics in README.md
+- [ ] T034 Run full quality gates (ruff, mypy, pytest) and record outcomes in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
+- [ ] T035 Commit feature changes, push branch, and verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml
 
 ---
 
