@@ -60,20 +60,20 @@
 
 **Goal**: Ensure race metrics always render and update correctly from normalized telemetry and snapshot sources.
 
-**Independent Test**: Run telemetry updates with both lap payload variants and verify race-level plus per-car metrics update correctly, with placeholders when data is missing.
+**Independent Test**: Run telemetry updates with both lap payload variants and verify race-level plus per-car metrics (including safety-car field) update correctly within one refresh cycle, with placeholders when data is missing.
 
 ### Tests for User Story 2
 
 - [ ] T016 [P] [US2] Add lap normalization compatibility tests for lap.payload.lap_time_ms and lap_completed.payload.time_ms in tests/test_live_translation.py
 - [ ] T017 [P] [US2] Add race snapshot aggregation tests for active and inactive race scenarios in tests/test_state_manager.py
-- [ ] T018 [P] [US2] Add per-car metric calculation tests (lap_count, latest, best, average) in tests/test_state_manager.py
-- [ ] T019 [P] [US2] Add resilient handling tests for unknown car IDs and missing lap times in tests/test_state_manager.py
+- [ ] T018 [P] [US2] Add per-car and global metric calculation tests (lap_count, latest, best, average, leader, fastest, total_laps, safety_car_active) in tests/test_state_manager.py
+- [ ] T019 [P] [US2] Add resilient handling and refresh-cycle propagation tests for unknown car IDs, missing lap times, and one-cycle metric updates in tests/test_state_manager.py
 
 ### Implementation for User Story 2
 
 - [ ] T020 [US2] Implement always-visible race metrics section with placeholder rendering for missing values in src/dashboard.py
 - [ ] T021 [US2] Implement race-level metric rendering (name, status, mode, elapsed, progress) in src/dashboard.py
-- [ ] T022 [US2] Implement per-car and global metrics rendering path (leader, fastest lap, total laps, fuel, pit, speed) in src/dashboard.py
+- [ ] T022 [US2] Implement per-car and global metrics rendering path (leader, fastest lap, total laps, safety car, fuel, pit, speed) in src/dashboard.py
 - [ ] T023 [US2] Wire normalized lap updates into unified state update flow for race metrics in src/state_manager.py and src/carrera_client.py
 - [ ] T024 [US2] Ensure repository/service fallback hydration for race metadata when snapshot fields are absent in src/dashboard.py and src/services/race_service.py
 
@@ -108,10 +108,10 @@
 
 **Purpose**: Final verification, documentation alignment, and release hygiene.
 
-- [ ] T032 [P] Update operator verification steps and expected outcomes for this feature in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
+- [ ] T032 [P] Update operator verification steps and expected outcomes for this feature (including safety-car and one-refresh-cycle checks) in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
 - [ ] T033 [P] Update dashboard behavior notes for icon-only connection and always-visible metrics in README.md
 - [ ] T034 Run full quality gates (ruff, mypy, pytest) and record outcomes in specs/006-calm-connection-ui-restore-race-metrics/quickstart.md
-- [ ] T035 Commit feature changes, push branch, and verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml
+- [ ] T035 Commit feature changes, push branch, verify CI run status for the head commit via GitHub Actions in .github/workflows/ci.yml, and confirm FR-014 scope compliance in specs/006-calm-connection-ui-restore-race-metrics/spec.md
 
 ---
 
