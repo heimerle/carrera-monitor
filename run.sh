@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Launches the Carrera telemetry pipeline (src.main), which now serves the
+# RacePulse 132 dashboard at http://localhost:<dashboard.port> (default 8501).
+# The dashboard renders live Control-Unit telemetry read from logs/state.json
+# via its /api/state endpoint. Pass --no-dashboard to skip it. The old
+# Streamlit UI (src/app.py, src/dashboard.py) is no longer launched.
+
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 

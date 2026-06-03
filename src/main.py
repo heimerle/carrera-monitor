@@ -6,8 +6,9 @@ Two run modes:
   `CarreraClientRunner`, with reconnect.
 
 In both cases the producer publishes to a shared `EventBus`; the
-`StateManager` and `JsonlEventWriter` subscribe. A Streamlit subprocess is
-launched unless `--no-dashboard`.
+`StateManager` and `JsonlEventWriter` subscribe. The RacePulse 132 dashboard
+(`src.dashboard_server`, serving the live `/api/state` snapshot) is launched
+as a subprocess unless `--no-dashboard`.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--mac", type=str, default=None, help="Bypass BLE scan; connect to this MAC.")
     p.add_argument("--log-dir", type=Path, default=None, help="Override log directory.")
     p.add_argument(
-        "--no-dashboard", action="store_true", help="Do not auto-launch Streamlit dashboard."
+        "--no-dashboard", action="store_true", help="Do not auto-launch the RacePulse dashboard."
     )
     p.add_argument(
         "--log-level",
@@ -202,7 +203,7 @@ async def run(args: argparse.Namespace) -> int:
     # Optional dashboard subprocess.
     dashboard_proc: subprocess.Popen[bytes] | None = None
     if cfg.dashboard.enabled:
-        dashboard_proc = _launch_dashboard(cfg.dashboard.port)
+        dashboard_proc = _launch_dashboard(cfg.dashboard.port, log_dir / "state.json")
         if dashboard_proc is not None:
             print(f"Dashboard: http://localhost:{cfg.dashboard.port}", flush=True)
 
@@ -255,26 +256,29 @@ async def run(args: argparse.Namespace) -> int:
     return exit_code
 
 
-def _launch_dashboard(port: int) -> subprocess.Popen[bytes] | None:
-    """Best-effort `streamlit run` subprocess. Failure does not abort the pipeline."""
+def _launch_dashboard(port: int, state_file: Path) -> subprocess.Popen[bytes] | None:
+    """Best-effort RacePulse dashboard subprocess.
+
+    Launches the stdlib ``src.dashboard_server`` (serving the RacePulse 132
+    UI plus the live ``/api/state`` endpoint backed by ``state_file``).
+    Failure does not abort the telemetry pipeline.
+    """
     try:
         return subprocess.Popen(
             [
                 sys.executable,
                 "-m",
-                "streamlit",
-                "run",
-                "src/app.py",
-                "--server.port",
+                "src.dashboard_server",
+                "--port",
                 str(port),
-                "--server.headless",
-                "true",
+                "--state-file",
+                str(state_file),
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except OSError as exc:
-        logger.warning("dashboard: failed to launch streamlit: %s", exc)
+        logger.warning("dashboard: failed to launch RacePulse dashboard: %s", exc)
         return None
 
 

@@ -8,10 +8,25 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "lang": "de",
   "driverCount": 8,
   "layout": "broadcast",
+  "dataSource": "live",
   "showTrackMap": true,
   "showEvents": true,
   "showBT": true
 }/*EDITMODE-END*/;
+
+// Small badge (top-right of the canvas) showing whether the dashboard is
+// rendering live Control-Unit telemetry, the simulator, or waiting for data.
+function SourceBadge({ source, error }) {
+  const label = source === 'live' ? 'LIVE' : source === 'sim' ? 'SIM' : 'LIVE · WARTEN';
+  const title = source === 'waiting'
+    ? (error ? `Keine Live-Daten: ${error}` : 'Warte auf erste Telemetrie von /api/state')
+    : (source === 'live' ? 'Live-Telemetrie der Control Unit' : 'Simulierte Demo-Daten');
+  return (
+    <div className={`src-badge src-${source}`} title={title}>
+      <span className="src-led"></span>{label}
+    </div>
+  );
+}
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
@@ -59,10 +74,27 @@ function App() {
     r.style.setProperty('--accent', t.accent);
   }, [t.accent]);
 
-  const snap = useMemo(() => sampleRace(precomp, raceClock, sim), [precomp, raceClock, sim]);
-  const events = useMemo(() => buildEvents(precomp, raceClock, sim, strings), [precomp, raceClock, sim, strings]);
+  const simSnap = useMemo(() => sampleRace(precomp, raceClock, sim), [precomp, raceClock, sim]);
+  const simEvents = useMemo(() => buildEvents(precomp, raceClock, sim, strings), [precomp, raceClock, sim, strings]);
+
+  // ── Live telemetry (polls /api/state) ─────────────────────────────────
+  const wantLive = t.dataSource === 'live';
+  const { live, error: liveError } = useLiveData(500, wantLive);
+  const liveActive = wantLive && !!live;
+
+  // Effective data feeding the widgets: real telemetry when available,
+  // otherwise the simulator (also used as a populated placeholder while we
+  // wait for the first live snapshot). The source badge makes the mode clear.
+  const snap = liveActive ? live.snap : simSnap;
+  const events = liveActive ? live.events : simEvents;
+  const displayState = liveActive ? live.raceState : raceState;
+  const leaderLap = liveActive ? live.leaderLap : Math.min(simSnap.leaderLap, sim.totalLaps);
+  const totalLaps = liveActive ? live.totalLaps : sim.totalLaps;
+  const source = !wantLive ? 'sim' : (liveActive ? 'live' : 'waiting');
 
   const onAction = (a) => {
+    // Controls drive the simulator only; in live mode race state comes from
+    // the Control Unit, so these are no-ops there (overwritten next poll).
     if (a === 'start')  { setRaceClock(0); setRaceState('RUNNING'); }
     if (a === 'pause')  setRaceState('PAUSED');
     if (a === 'resume') setRaceState('RUNNING');
@@ -75,12 +107,13 @@ function App() {
   return (
     <div className="stage">
       <div className="canvas" data-density={t.density}>
+        <SourceBadge source={source} error={liveError} />
         <div className="grid">
           <TopBar
-            raceState={raceState}
+            raceState={displayState}
             raceSnapshot={snap}
-            leaderLap={Math.min(snap.leaderLap, sim.totalLaps)}
-            totalLaps={sim.totalLaps}
+            leaderLap={leaderLap}
+            totalLaps={totalLaps}
             clock={{ wall: wallClock, elapsedMs: raceClock * 1000 }}
             lang={lang}
             t={strings}
@@ -94,15 +127,15 @@ function App() {
             <div className="col-r">
               {t.showEvents    && <EventsFeed events={events} t={strings} />}
               {t.showTrackMap  && <TrackMap snap={snap} t={strings} />}
-              {t.showBT        && <BluetoothPanel raceTime={raceClock} t={strings} />}
+              {t.showBT        && <BluetoothPanel raceTime={raceClock} t={strings} live={liveActive ? live.connection : undefined} />}
             </div>
           </div>
 
           <ControlStrip
-            raceState={raceState}
+            raceState={displayState}
             onAction={onAction}
-            leaderLap={Math.min(snap.leaderLap, sim.totalLaps)}
-            totalLaps={sim.totalLaps}
+            leaderLap={leaderLap}
+            totalLaps={totalLaps}
             t={strings}
             lang={lang}
             setLang={(l) => { setLang(l); setTweak('lang', l); }}
@@ -138,6 +171,18 @@ function App() {
             min={2}
             max={8}
             onChange={(v) => setTweak('driverCount', v)}
+          />
+        </TweakSection>
+
+        <TweakSection label="Data">
+          <TweakRadio
+            label="Source"
+            value={t.dataSource}
+            options={[
+              { value: 'live', label: 'Live' },
+              { value: 'sim',  label: 'Sim' },
+            ]}
+            onChange={(v) => setTweak('dataSource', v)}
           />
         </TweakSection>
 

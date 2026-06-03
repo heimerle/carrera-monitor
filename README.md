@@ -27,9 +27,16 @@ and watch a live Streamlit dashboard — all from one process.
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m src.main --mock
-# In another shell, the Streamlit dashboard auto-opens on
+# The RacePulse 132 dashboard auto-starts on
 # http://localhost:8501 (or use --no-dashboard to skip).
 ```
+
+The auto-launched dashboard is the **RacePulse 132** live-timing UI
+(`src/dashboard/`), served by `src/dashboard_server.py`. It renders the
+live telemetry snapshot (`logs/state.json`) via its `/api/state` endpoint —
+a motorsport timing tower with position table, sector/fuel/pit strips, an
+events feed, track map, and AppConnect/Control-Unit status. `./run.sh` is
+the convenience wrapper around `python -m src.main`.
 
 See [specs/main/quickstart.md](specs/main/quickstart.md) for the full
 5-minute walkthrough.
@@ -121,8 +128,11 @@ running telemetry feed automatically records laps. Finished races can be
 data) and exported to CSV (per-driver standings + per-lap detail).
 
 - Walkthrough: [specs/001-race-management/quickstart.md](specs/001-race-management/quickstart.md)
-- Streamlit entry point: `streamlit run src/app.py -- --mock` (or simply
-  let `python -m src.main --mock` spawn it for you).
+- The **Race Management**, **Race Reports**, and **Settings** admin pages
+  still live in the legacy Streamlit app (`src/app.py`). It is **no longer
+  auto-launched** (the RacePulse dashboard takes its place). Run it manually
+  on a separate port when you need those pages:
+  `streamlit run src/app.py --server.port 8502 -- --mock`.
 - **Schema reset policy**: the project has no Alembic migrations yet
   (deferred per research item R-103). When the schema changes, stop the
   app, delete `data/carrera_dashboard.sqlite3` (plus the `-wal`/`-shm`
@@ -130,11 +140,13 @@ data) and exported to CSV (per-driver standings + per-lap detail).
 
 ## Known Limitations
 
-- Single-process. The dashboard is a Streamlit subprocess of the
-  producer; cross-machine viewing requires SSH tunneling.
+- Single-process. The RacePulse dashboard is a stdlib HTTP subprocess of
+  the producer (`src/dashboard_server.py`); cross-machine viewing requires
+  SSH tunneling.
 - No replay tool yet. The JSONL format is stable but `tools/replay.py`
   is post-MVP (see roadmap).
-- No WebSocket/REST surface — only `state.json` polling.
+- No WebSocket push — the dashboard polls `/api/state` (backed by
+  `state.json`) at a fixed interval.
 
 ## Roadmap
 

@@ -4,7 +4,7 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "7132", "--directory", "src/dashboard"],
+      "runtimeArgs": ["-m", "src.dashboard_server", "--port", "7132", "--state-file", "logs/state.json"],
       "port": 7132
     }
   ]

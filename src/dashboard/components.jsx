@@ -299,7 +299,11 @@ function EventsFeed({ events, t }) {
                 : '•'
               }</span>
               <span className="event-msg">{e.msg}</span>
-              <span className="event-time">{formatClock(Math.max(0, e.tAbs * 1000))}</span>
+              <span className="event-time">{
+                e.iso
+                  ? new Date(e.iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                  : formatClock(Math.max(0, e.tAbs * 1000))
+              }</span>
             </div>
           ))}
           {visible.length === 0 && (
@@ -361,7 +365,65 @@ function TrackMap({ snap, t }) {
 }
 
 // ── BT / Control Unit Status ───────────────────────────────────────────────
-function BluetoothPanel({ raceTime, t }) {
+// In sim mode (`live` undefined) the panel shows synthetic demo telemetry.
+// In live mode it renders the real connection record from state.json: rssi,
+// link state, device, and reconnect count. Values the Control Unit does not
+// report (latency, RX/TX packet counts) render as "—".
+function BluetoothPanel({ raceTime, t, live }) {
+  if (live) {
+    const tone = live.ok ? 'ok' : (live.warn ? 'warn' : 'warn');
+    const connLabel = (live.deviceName || live.state || '').toString().toUpperCase();
+    return (
+      <div className="panel">
+        <div className="panel-hd">
+          <h2>{t.bt}</h2>
+          <div className="hd-meta">
+            <span className="tag" data-tone={live.ok ? 'ok' : 'warn'}>
+              <span className="led-mini"></span>{(live.ok ? t.btConn : live.state).toString().toUpperCase()}
+            </span>
+          </div>
+        </div>
+        <div className="panel-body bt-grid">
+          <div className="bt-cell">
+            <div className="k">{t.signal}</div>
+            <div className="v" data-state={tone}>
+              {live.rssi != null ? `${live.rssi} dBm` : '—'}
+              <span className={`signal-bars s-${live.bars}`}><i></i><i></i><i></i><i></i></span>
+            </div>
+          </div>
+          <div className="bt-cell">
+            <div className="k">{t.latency}</div>
+            <div className="v">—</div>
+          </div>
+          <div className="bt-cell">
+            <div className="k">{t.cuFw}</div>
+            <div className="v mono">{live.mac || '—'}</div>
+          </div>
+          <div className="bt-cell">
+            <div className="k">{t.heartbeat}</div>
+            <div className="v" data-state={tone}>{live.state.toString().toUpperCase()}</div>
+          </div>
+          <div className="bt-cell bt-cell-wide">
+            <div className="bt-packets">
+              <div className="bt-packet">
+                <div className="k">RECONNECTS</div>
+                <div className="v mono">{live.reconnects}</div>
+              </div>
+              <div className="bt-packet">
+                <div className="k">DEVICE</div>
+                <div className="v mono">{connLabel || '—'}</div>
+              </div>
+            </div>
+            <div className="bt-tags">
+              <span className="tag" data-tone="info">APPCONNECT</span>
+              <span className="tag">BLE · 2.4 GHz</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const rx = 8420 + Math.floor(raceTime * 47);
   const tx = 312 + Math.floor(raceTime * 1.8);
   const latency = 16 + Math.round(Math.sin(raceTime * 0.7) * 4);
